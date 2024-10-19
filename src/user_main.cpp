@@ -31,10 +31,74 @@ public:
     {
         return HAL_GPIO_ReadPin(gpio[port_id], 1U << pin_id);
     }
+
+    static bool is_high()
+    {
+        return read();
+    }
 };
 
-GpioPin_t<2, 13> led_pin;
-GpioPin_t<0, 0> button_pin;
+template<int port_id, int pin_id, bool is_inverted_polarity>
+class Led_t
+{
+    GpioPin_t<port_id, pin_id> led_pin;
+public:
+    void on()
+    {
+        if (is_inverted_polarity)
+        {
+            led_pin.writeLow();
+        }
+        else
+        {
+            led_pin.writeHigh();
+        }
+    }
+
+    void off()
+    {
+        if (is_inverted_polarity)
+        {
+            led_pin.writeHigh();
+        }
+        else
+        {
+            led_pin.writeLow();
+        }
+    }
+};
+
+template<int port_id, int pin_id, bool is_inverted_polarity>
+class Button_t
+{
+    GpioPin_t<port_id, pin_id> button_pin;
+public:
+    bool is_pressed()
+    {
+        if (is_inverted_polarity)
+        {
+            return button_pin.is_high() == false;
+        }
+        else
+        {
+            return button_pin.is_high();
+        }
+    }
+};
+
+// STM32F401RCT6
+//Led_t<2, 13, true> led;
+//Button_t<0, 0, true> button;
+
+// STM32G431CBU6
+// Led_t<2, 6, false> led;
+// Button_t<2, 13,false> button;
+
+// STM32F103ZET6
+Led_t<1, 9, true> led;  // D0-PB9, D1 PE5
+Led_t<4, 5, true> led2;  // D0-PB9, D1 PE5
+Button_t<0, 0,false> button;  // WAKE_UP
+Button_t<4, 4,true> button2;  // KO
 
 bool shell_cmd_clear_screen(FILE *f, ShellCmd_t *cmd, const char *s)
 {
@@ -67,11 +131,11 @@ bool shell_cmd_led(FILE *f, ShellCmd_t *cmd, const char *s)
     int state = cmd->get_int_arg(s, 1);
     if (state == 0)
     {
-        led_pin.writeHigh();
+        led.off();
     }
     else
     {
-        led_pin.writeLow();
+        led.on();
     }
 }
 
@@ -92,6 +156,7 @@ extern "C" int user_main(void)
     FILE *fuart1 = uart_fopen(&huart1);
     stdout = fuart1;
 
+    fprintf(fuart1, BG_BLACK FG_BRIGHT_WHITE VT100_CLEAR_SCREEN VT100_CURSOR_HOME VT100_SHOW_CURSOR);
     fprintf(fuart1, ENDL "Hello from %s!" ENDL, MCU_NAME_STR);
 #ifdef DEBUG
     printf("DEBUG=1, build time: " __TIME__ ENDL);
@@ -105,13 +170,29 @@ extern "C" int user_main(void)
     {
         shell.run();
 
-        if (button_pin.read() == 0)
+        if (button.is_pressed())
         {
-            led_pin.writeLow();
+            printf("Button pressed" ENDL);
+            HAL_Delay(200);
+            led.on();
         }
         else
         {
-            led_pin.writeHigh();
+            //printf("Button pressed" ENDL);
+            led.off();
         }
+
+        if (button2.is_pressed())
+        {
+            printf("Button pressed" ENDL);
+            HAL_Delay(200);
+            led2.on();
+        }
+        else
+        {
+            //printf("Button pressed" ENDL);
+            led2.off();
+        }
+
     }   
 }
