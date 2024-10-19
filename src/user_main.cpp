@@ -1,4 +1,4 @@
-#include "platform/cube_mx_stm32f103rc/main.h"
+#include "main.h"
 #include <stdio.h>
 #include <hal_wrapper_stm32.h>
 #include <uart_stdio_stm32.h>
