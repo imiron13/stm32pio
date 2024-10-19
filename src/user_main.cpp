@@ -12,6 +12,30 @@ extern UART_HandleTypeDef huart1;
 
 Shell_t shell;
 
+template<int port_id, int pin_id>
+class GpioPin_t
+{
+    constexpr static GPIO_TypeDef *const gpio[5] = { GPIOA, GPIOB, GPIOC, GPIOD, GPIOE };
+public:
+    static void writeHigh()
+    {
+        HAL_GPIO_WritePin(gpio[port_id], 1U << pin_id, GPIO_PIN_SET);
+    }
+
+    static void writeLow()
+    {
+        HAL_GPIO_WritePin(gpio[port_id], 1U << pin_id, GPIO_PIN_RESET);
+    }
+
+    static bool read()
+    {
+        return HAL_GPIO_ReadPin(gpio[port_id], 1U << pin_id);
+    }
+};
+
+GpioPin_t<2, 13> led_pin;
+GpioPin_t<0, 0> button_pin;
+
 bool shell_cmd_clear_screen(FILE *f, ShellCmd_t *cmd, const char *s)
 {
     fprintf(f, BG_BLACK FG_BRIGHT_WHITE VT100_CLEAR_SCREEN VT100_CURSOR_HOME);
@@ -38,12 +62,27 @@ bool shell_cmd_tetris(FILE *f, ShellCmd_t *cmd, const char *s)
 }
 #endif  
 
+bool shell_cmd_led(FILE *f, ShellCmd_t *cmd, const char *s)
+{
+    int state = cmd->get_int_arg(s, 1);
+    if (state == 0)
+    {
+        led_pin.writeHigh();
+    }
+    else
+    {
+        led_pin.writeLow();
+    }
+}
+
 void init_shell(FILE *device=stdout)
 {
     shell.add_command(ShellCmd_t("cls", "Clear screen", shell_cmd_clear_screen));
 #if (EN_TETRIS == 1)
     shell.add_command(ShellCmd_t("tetris", "Tetris!", shell_cmd_tetris));
 #endif    
+    shell.add_command(ShellCmd_t("led", "LED control", shell_cmd_led));
+
     shell.set_device(device);
     shell.print_prompt();
 }
@@ -65,5 +104,14 @@ extern "C" int user_main(void)
     while (1)
     {
         shell.run();
+
+        if (button_pin.read() == 0)
+        {
+            led_pin.writeLow();
+        }
+        else
+        {
+            led_pin.writeHigh();
+        }
     }   
 }

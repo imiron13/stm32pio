@@ -25,6 +25,9 @@
 #elif L4
 #include "stm32l4xx_hal.h"
 #define STM32_FAMILY_NAME_STR       "L4"
+#elif G4
+#include "stm32g4xx_hal.h"
+#define STM32_FAMILY_NAME_STR       "G4"
 #else
 #error "Unsupported STM32 Family"
 #endif
