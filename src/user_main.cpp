@@ -41,6 +41,7 @@ public:
     }
 };
 
+const int PORT_ID_DUMMY = INT32_MAX;
 template<int port_id, int pin_id, bool is_inverted_polarity>
 class Led_t
 {
@@ -48,28 +49,36 @@ class Led_t
 public:
     void on()
     {
-        if (is_inverted_polarity)
+        if (port_id != PORT_ID_DUMMY)
         {
-            led_pin.writeLow();
-        }
-        else
-        {
-            led_pin.writeHigh();
+            if (is_inverted_polarity)
+            {
+                led_pin.writeLow();
+            }
+            else
+            {
+                led_pin.writeHigh();
+            }
         }
     }
 
     void off()
     {
-        if (is_inverted_polarity)
+        if (port_id != PORT_ID_DUMMY)
         {
-            led_pin.writeHigh();
-        }
-        else
-        {
-            led_pin.writeLow();
+            if (is_inverted_polarity)
+            {
+                led_pin.writeHigh();
+            }
+            else
+            {
+                led_pin.writeLow();
+            }
         }
     }
 };
+
+typedef Led_t<PORT_ID_DUMMY, 0, false> DummyLed_t;
 
 template<int port_id, int pin_id, bool is_inverted_polarity>
 class Button_t
@@ -78,30 +87,45 @@ class Button_t
 public:
     bool is_pressed()
     {
-        if (is_inverted_polarity)
+        if (port_id == PORT_ID_DUMMY)
         {
-            return button_pin.is_high() == false;
+            return false;
         }
         else
         {
-            return button_pin.is_high();
+            if (is_inverted_polarity)
+            {
+                return button_pin.is_high() == false;
+            }
+            else
+            {
+                return button_pin.is_high();
+            }
         }
     }
 };
 
-// STM32F401RCT6
-#if (MCU == STM32G431CB)
+typedef Button_t<PORT_ID_DUMMY, 0, 0> DummyButton_t;
+
+#define STM32F401RC (1)
+#define STM32G431CB (2)
+#define STM32F103ZE (3)
+
+#if (MCU == STM32F401RC)
 Led_t<2, 13, true> led1;
 Button_t<0, 0, true> button1;
 #elif (MCU == STM32G431CB)
 Led_t<2, 6, false> led1;
 Button_t<2, 13,false> button2;
 Button_t<1, 8,false> button1;
-#elif (MCU == STM32F103ZET6)
-Led_t<1, 9, true> led1;  // D0-PB9, D1 PE5
-Led_t<4, 5, true> led2;  // D0-PB9, D1 PE5
+#elif (MCU == STM32F103ZE)
+Led_t<1, 9, true> led1;  // D0-PB9
+Led_t<4, 5, true> led2;  // D1 PE5
 Button_t<4, 4,true> button1;  // KO
 Button_t<0, 0,false> button2;  // WAKE_UP
+#elif (MCU == STM32F103RC)
+DummyLed_t led1;
+DummyButton_t button1;
 #endif
 
 bool shell_cmd_clear_screen(FILE *f, ShellCmd_t *cmd, const char *s)
@@ -186,8 +210,8 @@ extern "C" int user_main(void)
         {
             led1.off();
         }
-
-        /*if (button2.is_pressed())
+#if 0
+        if (button2.is_pressed())
         {
             printf("Button pressed" ENDL);
             HAL_Delay(200);
@@ -196,7 +220,7 @@ extern "C" int user_main(void)
         else
         {
             led2.off();
-        }*/
-
+        }
+#endif        
     }   
 }
