@@ -90,20 +90,19 @@ public:
 };
 
 // STM32F401RCT6
-//Led_t<2, 13, true> led1;
-//Button_t<0, 0, true> button1;
-
-// STM32G431CBU6
+#if (MCU == STM32G431CB)
+Led_t<2, 13, true> led1;
+Button_t<0, 0, true> button1;
+#elif (MCU == STM32G431CB)
 Led_t<2, 6, false> led1;
 Button_t<2, 13,false> button2;
 Button_t<1, 8,false> button1;
-
-// STM32F103ZET6
-//Led_t<1, 9, true> led1;  // D0-PB9, D1 PE5
-//Led_t<4, 5, true> led2;  // D0-PB9, D1 PE5
-//Button_t<4, 4,true> button1;  // KO
-//Button_t<0, 0,false> button2;  // WAKE_UP
-
+#elif (MCU == STM32F103ZET6)
+Led_t<1, 9, true> led1;  // D0-PB9, D1 PE5
+Led_t<4, 5, true> led2;  // D0-PB9, D1 PE5
+Button_t<4, 4,true> button1;  // KO
+Button_t<0, 0,false> button2;  // WAKE_UP
+#endif
 
 bool shell_cmd_clear_screen(FILE *f, ShellCmd_t *cmd, const char *s)
 {
@@ -180,13 +179,11 @@ extern "C" int user_main(void)
         if (button1.is_pressed())
         {
             printf("Button pressed" ENDL);
-            //CDC_Transmit_FS((uint8_t*)("Hello from USB STM32"), 10);
             led1.on();
             HAL_Delay(200);
         }
         else
         {
-            //printf("Button pressed" ENDL);
             led1.off();
         }
 
