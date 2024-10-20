@@ -1,10 +1,13 @@
 #include "main.h"
 #include <stdio.h>
+#include <string.h>
 #include <hal_wrapper_stm32.h>
 #include <uart_stdio_stm32.h>
 #include <shell.h>
 #include <vt100_terminal.h>
 #include <tetris.h>
+#include <usbd_cdc_if.h>
+#include <usb_vcom_stdio_stm32.h>
 
 #define EN_TETRIS                   (1)
 
@@ -87,18 +90,20 @@ public:
 };
 
 // STM32F401RCT6
-//Led_t<2, 13, true> led;
-//Button_t<0, 0, true> button;
+//Led_t<2, 13, true> led1;
+//Button_t<0, 0, true> button1;
 
 // STM32G431CBU6
-// Led_t<2, 6, false> led;
-// Button_t<2, 13,false> button;
+Led_t<2, 6, false> led1;
+Button_t<2, 13,false> button2;
+Button_t<1, 8,false> button1;
 
 // STM32F103ZET6
-Led_t<1, 9, true> led;  // D0-PB9, D1 PE5
-Led_t<4, 5, true> led2;  // D0-PB9, D1 PE5
-Button_t<0, 0,false> button;  // WAKE_UP
-Button_t<4, 4,true> button2;  // KO
+//Led_t<1, 9, true> led1;  // D0-PB9, D1 PE5
+//Led_t<4, 5, true> led2;  // D0-PB9, D1 PE5
+//Button_t<4, 4,true> button1;  // KO
+//Button_t<0, 0,false> button2;  // WAKE_UP
+
 
 bool shell_cmd_clear_screen(FILE *f, ShellCmd_t *cmd, const char *s)
 {
@@ -131,12 +136,13 @@ bool shell_cmd_led(FILE *f, ShellCmd_t *cmd, const char *s)
     int state = cmd->get_int_arg(s, 1);
     if (state == 0)
     {
-        led.off();
+        led1.off();
     }
     else
     {
-        led.on();
+        led1.on();
     }
+    return true;
 }
 
 void init_shell(FILE *device=stdout)
@@ -154,10 +160,11 @@ void init_shell(FILE *device=stdout)
 extern "C" int user_main(void)
 {
     FILE *fuart1 = uart_fopen(&huart1);
-    stdout = fuart1;
+    FILE *fusb_vcom = usb_vcom_fopen(NULL);
+    stdout = fusb_vcom;
 
-    fprintf(fuart1, BG_BLACK FG_BRIGHT_WHITE VT100_CLEAR_SCREEN VT100_CURSOR_HOME VT100_SHOW_CURSOR);
-    fprintf(fuart1, ENDL "Hello from %s!" ENDL, MCU_NAME_STR);
+    printf(BG_BLACK FG_BRIGHT_WHITE VT100_CLEAR_SCREEN VT100_CURSOR_HOME VT100_SHOW_CURSOR);
+    printf(ENDL "Hello from %s!" ENDL, MCU_NAME_STR);
 #ifdef DEBUG
     printf("DEBUG=1, build time: " __TIME__ ENDL);
 #else
@@ -170,19 +177,20 @@ extern "C" int user_main(void)
     {
         shell.run();
 
-        if (button.is_pressed())
+        if (button1.is_pressed())
         {
             printf("Button pressed" ENDL);
+            //CDC_Transmit_FS((uint8_t*)("Hello from USB STM32"), 10);
+            led1.on();
             HAL_Delay(200);
-            led.on();
         }
         else
         {
             //printf("Button pressed" ENDL);
-            led.off();
+            led1.off();
         }
 
-        if (button2.is_pressed())
+        /*if (button2.is_pressed())
         {
             printf("Button pressed" ENDL);
             HAL_Delay(200);
@@ -190,9 +198,8 @@ extern "C" int user_main(void)
         }
         else
         {
-            //printf("Button pressed" ENDL);
             led2.off();
-        }
+        }*/
 
     }   
 }
