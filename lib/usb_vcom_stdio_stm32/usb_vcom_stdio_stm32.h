@@ -6,7 +6,7 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-FILE* usb_vcom_fopen(void *husb);
+FILE* usb_vcom_fopen();
 
 // returning EOF for file read causes no further reads possible from the file,
 // but for UART as file we want to return no data, but be able to continue

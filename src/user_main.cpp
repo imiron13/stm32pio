@@ -183,9 +183,10 @@ void init_shell(FILE *device=stdout)
 extern "C" int user_main(void)
 {
     FILE *fuart1 = uart_fopen(&huart1);
-    FILE *fusb_vcom = usb_vcom_fopen(NULL);
+    FILE *fusb_vcom = usb_vcom_fopen();
     stdout = fusb_vcom;
 
+    HAL_Delay(2000);  // delay for USB reconnect
     printf(BG_BLACK FG_BRIGHT_WHITE VT100_CLEAR_SCREEN VT100_CURSOR_HOME VT100_SHOW_CURSOR);
     printf(ENDL "Hello from %s!" ENDL, MCU_NAME_STR);
 #ifdef DEBUG

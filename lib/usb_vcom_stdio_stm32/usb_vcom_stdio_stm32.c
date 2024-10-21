@@ -7,6 +7,8 @@
 
 ssize_t usb_vcom_write(void *husb, const char *ptr, size_t len)
 {
+    UNUSED(husb);
+
     int status;
     do {
         status = CDC_Transmit_FS((uint8_t*)ptr, len);
@@ -17,11 +19,12 @@ ssize_t usb_vcom_write(void *husb, const char *ptr, size_t len)
 
 ssize_t usb_vcom_read(void *husb, char* buff, size_t len)
 {
+    UNUSED(husb);
     size_t bytes_read = usb_vcom_pop_data((uint8_t*)buff, len);
     return bytes_read == 0 ? FILE_READ_NO_MORE_DATA : bytes_read;
 }
 
-FILE* usb_vcom_fopen(void *husb)
+FILE* usb_vcom_fopen()
 {
     cookie_io_functions_t cookie_funcs = {
         .read = usb_vcom_read,
@@ -29,7 +32,7 @@ FILE* usb_vcom_fopen(void *husb)
         .seek = 0,
         .close = 0
     };
-    FILE *f = fopencookie(husb, "a+", cookie_funcs);
+    FILE *f = fopencookie(NULL, "a+", cookie_funcs);
     setbuf(f, NULL);
     setvbuf(f, NULL, _IONBF, 0);
     return f;
