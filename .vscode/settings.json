@@ -1,6 +1,0 @@
-{
-    "files.associations": {
-        "usbd_cdc_if.h": "c",
-        "usbd_cdc.h": "c"
-    }
-}
