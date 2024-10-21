@@ -1,12 +1,16 @@
 #include "main.h"
 #include <stdio.h>
 #include <string.h>
+
+#include <board.h>
 #include <hal_wrapper_stm32.h>
 #include <uart_stdio_stm32.h>
+#include <gpio_pin.h>
+#include <led.h>
+#include <button.h>
 #include <shell.h>
 #include <vt100_terminal.h>
 #include <tetris.h>
-#include <usbd_cdc_if.h>
 #include <usb_vcom_stdio_stm32.h>
 
 #define EN_TETRIS                   (1)
@@ -14,119 +18,6 @@
 extern UART_HandleTypeDef huart1;
 
 Shell_t shell;
-
-template<int port_id, int pin_id>
-class GpioPin_t
-{
-    constexpr static GPIO_TypeDef *const gpio[5] = { GPIOA, GPIOB, GPIOC, GPIOD, GPIOE };
-public:
-    static void writeHigh()
-    {
-        HAL_GPIO_WritePin(gpio[port_id], 1U << pin_id, GPIO_PIN_SET);
-    }
-
-    static void writeLow()
-    {
-        HAL_GPIO_WritePin(gpio[port_id], 1U << pin_id, GPIO_PIN_RESET);
-    }
-
-    static bool read()
-    {
-        return HAL_GPIO_ReadPin(gpio[port_id], 1U << pin_id);
-    }
-
-    static bool is_high()
-    {
-        return read();
-    }
-};
-
-const int PORT_ID_DUMMY = INT32_MAX;
-template<int port_id, int pin_id, bool is_inverted_polarity>
-class Led_t
-{
-    GpioPin_t<port_id, pin_id> led_pin;
-public:
-    void on()
-    {
-        if (port_id != PORT_ID_DUMMY)
-        {
-            if (is_inverted_polarity)
-            {
-                led_pin.writeLow();
-            }
-            else
-            {
-                led_pin.writeHigh();
-            }
-        }
-    }
-
-    void off()
-    {
-        if (port_id != PORT_ID_DUMMY)
-        {
-            if (is_inverted_polarity)
-            {
-                led_pin.writeHigh();
-            }
-            else
-            {
-                led_pin.writeLow();
-            }
-        }
-    }
-};
-
-typedef Led_t<PORT_ID_DUMMY, 0, false> DummyLed_t;
-
-template<int port_id, int pin_id, bool is_inverted_polarity>
-class Button_t
-{
-    GpioPin_t<port_id, pin_id> button_pin;
-public:
-    bool is_pressed()
-    {
-        if (port_id == PORT_ID_DUMMY)
-        {
-            return false;
-        }
-        else
-        {
-            if (is_inverted_polarity)
-            {
-                return button_pin.is_high() == false;
-            }
-            else
-            {
-                return button_pin.is_high();
-            }
-        }
-    }
-};
-
-typedef Button_t<PORT_ID_DUMMY, 0, 0> DummyButton_t;
-
-#define STM32F401RC (1)
-#define STM32G431CB (2)
-#define STM32F103ZE (3)
-
-#if (MCU == STM32F401RC)
-Led_t<2, 13, true> led1;
-Button_t<0, 0, true> button1;
-#elif (MCU == STM32G431CB)
-Led_t<2, 6, false> led1;
-Button_t<2, 13,false> button2;
-Button_t<1, 8,false> button1;
-#elif (MCU == STM32F103ZE)
-Led_t<1, 9, true> led1;  // D0-PB9
-Led_t<4, 5, true> led2;  // D1 PE5
-Button_t<4, 4,true> button1;  // KO
-Button_t<0, 0,false> button2;  // WAKE_UP
-#elif (MCU == STM32F103RC)
-DummyLed_t led1;
-DummyButton_t button1;
-#endif
 
 bool shell_cmd_clear_screen(FILE *f, ShellCmd_t *cmd, const char *s)
 {
@@ -180,9 +71,25 @@ void init_shell(FILE *device=stdout)
     shell.print_prompt();
 }
 
+void button1_on_pressed()
+{
+    printf("Button1 pressed" ENDL);
+    led1.on();
+    HAL_Delay(200);
+}
+
+void button2_on_pressed()
+{
+    printf("Button2 pressed" ENDL);
+    HAL_Delay(200);
+    led2.on();
+}
+
 extern "C" int user_main(void)
 {
     FILE *fuart1 = uart_fopen(&huart1);
+    UNUSED(fuart1);
+
     FILE *fusb_vcom = usb_vcom_fopen();
     stdout = fusb_vcom;
 
@@ -203,25 +110,20 @@ extern "C" int user_main(void)
 
         if (button1.is_pressed())
         {
-            printf("Button pressed" ENDL);
-            led1.on();
-            HAL_Delay(200);
+            button1_on_pressed();
         }
         else
         {
             led1.off();
         }
-#if 0
+
         if (button2.is_pressed())
         {
-            printf("Button pressed" ENDL);
-            HAL_Delay(200);
-            led2.on();
+            button2_on_pressed();
         }
         else
         {
             led2.off();
         }
-#endif        
     }   
 }
