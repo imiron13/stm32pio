@@ -101,6 +101,7 @@ extern "C" int user_main(void)
 #else
     printf("DEBUG=0, build time: " __TIME__ ENDL);
 #endif
+    printf("SysClk = %ld KHz" ENDL, HAL_RCC_GetSysClockFreq() / 1000);
 
     init_shell();    
 
