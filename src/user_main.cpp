@@ -127,6 +127,95 @@ bool shell_cmd_sd_card_write(FILE *f, ShellCmd_t *cmd, const char *s)
 }
 #endif
 
+#if (EN_FATFS_SHELL_CMDS == 1)
+char current_folder[FF_MAX_LFN] = "/";
+
+bool shell_cmd_ls(FILE *f, ShellCmd_t *cmd, const char *s)
+{
+    DIR dir;
+    int res = f_opendir(&dir, current_folder);
+    if(res != FR_OK) {
+       fprintf(f, "f_opendir() failed, res = %d" ENDL, res);
+        return false;
+    }
+
+    FILINFO fileInfo;
+    uint32_t totalFiles = 0;
+    uint32_t totalDirs = 0;
+    for(;;) {
+       res = f_readdir(&dir, &fileInfo);
+       if((res != FR_OK) || (fileInfo.fname[0] == '\0')) {
+           break;
+       }
+
+       if(fileInfo.fattrib & AM_DIR) {
+           fprintf(f, "  DIR  %s" ENDL, fileInfo.fname);
+           totalDirs++;
+       } else {
+           fprintf(f, "  FILE %s" ENDL, fileInfo.fname);
+           totalFiles++;
+       }
+    }
+
+    return true;
+}
+
+bool shell_cmd_pwd(FILE *f, ShellCmd_t *cmd, const char *s)
+{
+    fprintf(f, "%s" ENDL, current_folder);
+    return true;
+}
+
+bool shell_cmd_cd(FILE *f, ShellCmd_t *cmd, const char *s)
+{
+    bool is_success = true;
+    DIR dir;
+    const char *folder_arg = cmd->get_str_arg(s, 1);
+    char *new_folder = (char*)malloc(FF_MAX_LFN);
+    if (strcmp(folder_arg, "..") == 0)
+    {
+        int i = 0;
+        int slash_pos = 0;
+        while (current_folder[i] != 0)
+        {
+            if (current_folder[i] == '/')
+            {
+                slash_pos = i;
+            }
+            i++;
+        }
+        if (slash_pos == 0) slash_pos = 1;
+        current_folder[slash_pos] = 0;
+    }
+    else
+    {
+        if (folder_arg[0] != '/')
+        {
+            strcpy(new_folder, current_folder);
+            if (current_folder[strlen(current_folder)- 1] != '/')
+            {
+                strcat(new_folder, "/");
+            }
+        }
+
+        strcat(new_folder, folder_arg);
+        int res = f_opendir(&dir, new_folder);
+
+        if(res != FR_OK) {
+            fprintf(f, "Invalid path" ENDL);
+            is_success = false;
+        }
+        else
+        {
+            strcpy(current_folder, new_folder);
+
+        }
+    }
+    free(new_folder);
+    return is_success;
+}
+#endif
+
 void init_shell(FILE *device=stdout)
 {
     shell.add_command(ShellCmd_t("cls", "Clear screen", shell_cmd_clear_screen));
@@ -136,7 +225,12 @@ void init_shell(FILE *device=stdout)
 #if (EN_SD_CARD_READ_WRITE_SHELL_CMDS == 1)
     shell.add_command(ShellCmd_t("sdrd", "SD card read", shell_cmd_sd_card_read));
     shell.add_command(ShellCmd_t("sdwr", "SD card write", shell_cmd_sd_card_write));
-#endif 
+#endif
+#if (EN_FATFS_SHELL_CMDS == 1)
+    shell.add_command(ShellCmd_t("ls", "Print conents of the current directory", shell_cmd_ls));
+    shell.add_command(ShellCmd_t("cd", "Change directory", shell_cmd_cd));
+    shell.add_command(ShellCmd_t("pwd", "Print current directory", shell_cmd_pwd));
+#endif    
     shell.add_command(ShellCmd_t("led", "LED control", shell_cmd_led));
 
     shell.set_device(device);
@@ -152,7 +246,7 @@ bool init_fatfs()
     // mount the default drive
     res = f_mount(&fs, "", 0);
     if(res != FR_OK) {
-        printf("f_mount() failed, res = %d\r\n", res);
+        printf("f_mount() failed, res = %d" ENDL, res);
         return false;
     }
 
@@ -161,14 +255,14 @@ bool init_fatfs()
     // Warning! This fills fs.n_fatent and fs.csize!
     res = f_getfree("", &freeClust, &fs_ptr);
     if(res != FR_OK) {
-        printf("f_getfree() failed, res = %d\r\n", res);
+        printf("f_getfree() failed, res = %d" ENDL, res);
         return false;
     }
 
     uint32_t totalBlocks = (fs.n_fatent - 2) * fs.csize;
     uint32_t freeBlocks = freeClust * fs.csize;
-    printf("done\n");
-    printf("Total blocks: %lu (%lu MiB), free blocks: %lu (%lu MiB), cluster=%lu B\r\n",
+    printf("done" ENDL);
+    printf("Total blocks: %lu (%lu MiB), free blocks: %lu (%lu MiB), cluster=%lu B" ENDL,
                 totalBlocks, totalBlocks / 2048,
                 freeBlocks, freeBlocks / 2048,
                 fs.csize * SD_CARD_BLOCK_SIZE_IN_BYTES);
@@ -216,7 +310,7 @@ extern "C" void task_user_input(void *argument)
     stdout = fuart1;
 
     FILE *fusb_vcom = usb_vcom_fopen();
-    //stdout = fusb_vcom;
+    stdout = fusb_vcom;
 
     HAL_Delay(2000);  // delay for USB reconnect
     printf(BG_BLACK FG_BRIGHT_WHITE VT100_CLEAR_SCREEN VT100_CURSOR_HOME VT100_SHOW_CURSOR);
