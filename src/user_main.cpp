@@ -13,9 +13,18 @@
 #include <tetris.h>
 #include <usb_vcom_stdio_stm32.h>
 
-#define EN_TETRIS                   (1)
+#include <FreeRTOS.h>
+#include "task.h"
+#include "cmsis_os.h"
+#include "usb_device.h"
+
+#define EN_SD_CARD_READ_WRITE_SHELL_CMDS                    (1)
+#define EN_TETRIS                                           (1)
+
+static const uint32_t SD_CARD_BLOCK_SIZE_IN_BYTES = 512;  
 
 extern UART_HandleTypeDef huart1;
+extern SD_HandleTypeDef hsd;
 
 Shell_t shell;
 
@@ -59,34 +68,93 @@ bool shell_cmd_led(FILE *f, ShellCmd_t *cmd, const char *s)
     return true;
 }
 
+#if (EN_SD_CARD_READ_WRITE_SHELL_CMDS == 1)
+uint8_t sd_card_buf[SD_CARD_BLOCK_SIZE_IN_BYTES];
+
+bool shell_cmd_sd_card_read(FILE *f, ShellCmd_t *cmd, const char *s)
+{
+    int blk = cmd->get_int_arg(s, 1);
+    int num_bytes = cmd->get_int_arg(s, 2);
+    HAL_StatusTypeDef res = HAL_SD_ReadBlocks(&hsd, (uint8_t *)sd_card_buf, blk, 1, HAL_MAX_DELAY);
+    //int res = SDCARD_ReadSingleBlock(blk, sd_card_buf);
+    if (res != HAL_OK)
+     {
+        fprintf(f, "Error reading SD card block %u, error = %d" ENDL, blk, (int)hsd.ErrorCode);
+        return false;
+    }
+    else
+    {
+        for (int i = 0; i < num_bytes; i++)
+        {
+            fprintf(f, "%02X ", sd_card_buf[i]);
+            if ((i % 8) == 7)
+            {
+                fprintf(f, ENDL);
+            }
+        }
+        fprintf(f, ENDL);
+        return true;
+    }
+}
+
+bool shell_cmd_sd_card_write(FILE *f, ShellCmd_t *cmd, const char *s)
+{
+    int blk = cmd->get_int_arg(s, 1);
+    HAL_StatusTypeDef status = HAL_SD_WriteBlocks(&hsd, sd_card_buf, blk, 1, HAL_MAX_DELAY);
+
+    if (status != HAL_OK)
+    {
+        fprintf(f, "Error writing SD card block %d, error = %d" ENDL, blk, (int)hsd.ErrorCode);
+        return false;
+    }
+    else
+    {
+        fprintf(f, "Successfully written to SD card block %d" ENDL, blk);
+        return true;
+    }
+}
+#endif
+
 void init_shell(FILE *device=stdout)
 {
     shell.add_command(ShellCmd_t("cls", "Clear screen", shell_cmd_clear_screen));
 #if (EN_TETRIS == 1)
     shell.add_command(ShellCmd_t("tetris", "Tetris!", shell_cmd_tetris));
-#endif    
+#endif
+#if (EN_SD_CARD_READ_WRITE_SHELL_CMDS == 1)
+    shell.add_command(ShellCmd_t("sdrd", "SD card read", shell_cmd_sd_card_read));
+    shell.add_command(ShellCmd_t("sdwr", "SD card write", shell_cmd_sd_card_write));
+#endif 
     shell.add_command(ShellCmd_t("led", "LED control", shell_cmd_led));
 
     shell.set_device(device);
     shell.print_prompt();
 }
 
-void button1_on_pressed()
+bool init_storage()
 {
-    printf("Button1 pressed" ENDL);
-    led1.on();
-    HAL_Delay(200);
+    printf("SD card init...");
+    HAL_SD_CardInfoTypeDef card_info;
+    HAL_SD_GetCardInfo(&hsd, &card_info);
+    
+    // return init_fatfs();
+    printf("done, num_blks=%lu, blk_size=%lu" ENDL, card_info.BlockNbr, card_info.BlockSize);
+    return true;
 }
 
-void button2_on_pressed()
-{
-    printf("Button2 pressed" ENDL);
-    HAL_Delay(200);
-    led2.on();
-}
+osThreadId_t task_handle_user_input;
 
-extern "C" int user_main(void)
+extern "C" void task_user_input(void *argument);
+
+extern "C" void init()
 {
+    osThreadAttr_t defaultTask_attributes = { };
+    defaultTask_attributes.name = "task_user_input";
+    defaultTask_attributes.stack_size = 128 * 4;
+    defaultTask_attributes.priority = (osPriority_t) osPriorityNormal;
+
+    MX_USB_DEVICE_Init();
+
     FILE *fuart1 = uart_fopen(&huart1);
     UNUSED(fuart1);
 
@@ -102,29 +170,43 @@ extern "C" int user_main(void)
     printf("DEBUG=0, build time: " __TIME__ ENDL);
 #endif
     printf("SysClk = %ld KHz" ENDL, HAL_RCC_GetSysClockFreq() / 1000);
+    init_storage();
+    init_shell();  
 
-    init_shell();    
+    task_handle_user_input = osThreadNew(task_user_input, NULL, &defaultTask_attributes);
+}
 
-    while (1)
+extern "C" void task_user_input(void *argument)
+{
+    for(;;)
     {
         shell.run();
 
-        if (button1.is_pressed())
+        button1.update();
+        button2.update();
+
+        if (button1.is_pressed_event())
         {
-            button1_on_pressed();
+            printf("Button1 pressed" ENDL);
+            led1.on();
         }
-        else
+        else if (button1.is_released_event())
         {
+            printf("Button1 released" ENDL);
             led1.off();
         }
 
-        if (button2.is_pressed())
+        if (button2.is_pressed_event())
         {
-            button2_on_pressed();
+            printf("Button2 pressed" ENDL);
+            led2.on();
         }
-        else
+        else if (button2.is_released_event())
         {
+            printf("Button2 released" ENDL);
             led2.off();
         }
-    }   
+
+        osDelay(50);
+    }      
 }
