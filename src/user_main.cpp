@@ -153,11 +153,6 @@ extern "C" void task_user_input(void *argument);
 
 extern "C" void init()
 {
-    osThreadAttr_t defaultTask_attributes = { };
-    defaultTask_attributes.name = "task_user_input";
-    defaultTask_attributes.stack_size = 128 * 4;
-    defaultTask_attributes.priority = (osPriority_t) osPriorityNormal;
-
     MX_USB_DEVICE_Init();
 
     FILE *fuart1 = uart_fopen(&huart1);
@@ -168,7 +163,7 @@ extern "C" void init()
 
     HAL_Delay(2000);  // delay for USB reconnect
     printf(BG_BLACK FG_BRIGHT_WHITE VT100_CLEAR_SCREEN VT100_CURSOR_HOME VT100_SHOW_CURSOR);
-    printf(ENDL "Hello from %s!" ENDL, MCU_NAME_STR);
+    printf(ENDL "Hello from %s (FreeRTOS)!" ENDL, MCU_NAME_STR);
 #ifdef DEBUG
     printf("DEBUG=1, build time: " __TIME__ ENDL);
 #else
@@ -177,6 +172,11 @@ extern "C" void init()
     printf("SysClk = %ld KHz" ENDL, HAL_RCC_GetSysClockFreq() / 1000);
     init_storage();
     init_shell();  
+
+    osThreadAttr_t defaultTask_attributes = { };
+    defaultTask_attributes.name = "task_user_input";
+    defaultTask_attributes.stack_size = 512 * 4;
+    defaultTask_attributes.priority = (osPriority_t) osPriorityNormal;
 
     task_handle_user_input = osThreadNew(task_user_input, NULL, &defaultTask_attributes);
 }
