@@ -28,6 +28,7 @@
 #elif G4
 #include "stm32g4xx_hal.h"
 #define STM32_FAMILY_NAME_STR       "G4"
+#define MX_USB_DEVICE_Init MX_USB_Device_Init
 #else
 #error "Unsupported STM32 Family"
 #endif

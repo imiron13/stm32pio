@@ -16,11 +16,12 @@ ssize_t usb_vcom_write(void *husb, const char *ptr, size_t len)
     return status == USBD_OK ? len : -1;
 }
 
-
+int g_vcom_read_cnt = 0;
 ssize_t usb_vcom_read(void *husb, char* buff, size_t len)
 {
     UNUSED(husb);
     size_t bytes_read = usb_vcom_pop_data((uint8_t*)buff, len);
+    g_vcom_read_cnt++;
     return bytes_read == 0 ? FILE_READ_NO_MORE_DATA : bytes_read;
 }
 

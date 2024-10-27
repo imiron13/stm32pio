@@ -18,13 +18,16 @@
 #include "cmsis_os.h"
 #include "usb_device.h"
 
-#define EN_SD_CARD_READ_WRITE_SHELL_CMDS                    (1)
+#define EN_SD_CARD                                          (1 && (BOARD_HAS_SD_CARD == 1))
+#define EN_SD_CARD_READ_WRITE_SHELL_CMDS                    (1 && (EN_SD_CARD == 1))
 #define EN_TETRIS                                           (1)
 
 static const uint32_t SD_CARD_BLOCK_SIZE_IN_BYTES = 512;  
 
 extern UART_HandleTypeDef huart1;
+#if (EN_SD_CARD == 1)
 extern SD_HandleTypeDef hsd;
+#endif
 
 Shell_t shell;
 
@@ -133,12 +136,14 @@ void init_shell(FILE *device=stdout)
 
 bool init_storage()
 {
+#if (EN_SD_CARD == 1)    
     printf("SD card init...");
     HAL_SD_CardInfoTypeDef card_info;
     HAL_SD_GetCardInfo(&hsd, &card_info);
     
     // return init_fatfs();
     printf("done, num_blks=%lu, blk_size=%lu" ENDL, card_info.BlockNbr, card_info.BlockSize);
+#endif    
     return true;
 }
 
