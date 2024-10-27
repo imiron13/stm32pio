@@ -19,8 +19,17 @@
 #include "usb_device.h"
 
 #define EN_SD_CARD                                          (1 && (BOARD_HAS_SD_CARD == 1))
+#define EN_FATFS                                            (1 && (EN_SD_CARD == 1))
+
 #define EN_SD_CARD_READ_WRITE_SHELL_CMDS                    (1 && (EN_SD_CARD == 1))
+#define EN_FATFS_SHELL_CMDS                                 (1 && (EN_FATFS == 1))
+
 #define EN_TETRIS                                           (1)
+
+#if (EN_FATFS == 1)
+#include "ff.h"
+FATFS fs;
+#endif
 
 static const uint32_t SD_CARD_BLOCK_SIZE_IN_BYTES = 512;  
 
@@ -134,17 +143,55 @@ void init_shell(FILE *device=stdout)
     shell.print_prompt();
 }
 
+#if (EN_FATFS == 1)
+bool init_fatfs()
+{
+    printf("FATFS init...");
+    FRESULT res;
+
+    // mount the default drive
+    res = f_mount(&fs, "", 0);
+    if(res != FR_OK) {
+        printf("f_mount() failed, res = %d\r\n", res);
+        return false;
+    }
+
+    uint32_t freeClust;
+    FATFS* fs_ptr = &fs;
+    // Warning! This fills fs.n_fatent and fs.csize!
+    res = f_getfree("", &freeClust, &fs_ptr);
+    if(res != FR_OK) {
+        printf("f_getfree() failed, res = %d\r\n", res);
+        return false;
+    }
+
+    uint32_t totalBlocks = (fs.n_fatent - 2) * fs.csize;
+    uint32_t freeBlocks = freeClust * fs.csize;
+    printf("done\n");
+    printf("Total blocks: %lu (%lu MiB), free blocks: %lu (%lu MiB), cluster=%lu B\r\n",
+                totalBlocks, totalBlocks / 2048,
+                freeBlocks, freeBlocks / 2048,
+                fs.csize * SD_CARD_BLOCK_SIZE_IN_BYTES);
+    return true;
+}   
+#endif
+
 bool init_storage()
 {
 #if (EN_SD_CARD == 1)    
+#if (EN_FATFS == 1)
+    return init_fatfs();
+#else
     printf("SD card init...");
     HAL_SD_CardInfoTypeDef card_info;
     HAL_SD_GetCardInfo(&hsd, &card_info);
-    
-    // return init_fatfs();
+
     printf("done, num_blks=%lu, blk_size=%lu" ENDL, card_info.BlockNbr, card_info.BlockSize);
-#endif    
     return true;
+#endif
+#else
+    return false;
+#endif
 }
 
 osThreadId_t task_handle_user_input;
@@ -153,13 +200,23 @@ extern "C" void task_user_input(void *argument);
 
 extern "C" void init()
 {
+    osThreadAttr_t defaultTask_attributes = { };
+    defaultTask_attributes.name = "task_user_input";
+    defaultTask_attributes.stack_size = 512 * 4;
+    defaultTask_attributes.priority = (osPriority_t) osPriorityNormal;
+
+    task_handle_user_input = osThreadNew(task_user_input, NULL, &defaultTask_attributes);
+}
+
+extern "C" void task_user_input(void *argument)
+{
     MX_USB_DEVICE_Init();
 
     FILE *fuart1 = uart_fopen(&huart1);
-    UNUSED(fuart1);
+    stdout = fuart1;
 
     FILE *fusb_vcom = usb_vcom_fopen();
-    stdout = fusb_vcom;
+    //stdout = fusb_vcom;
 
     HAL_Delay(2000);  // delay for USB reconnect
     printf(BG_BLACK FG_BRIGHT_WHITE VT100_CLEAR_SCREEN VT100_CURSOR_HOME VT100_SHOW_CURSOR);
@@ -173,16 +230,6 @@ extern "C" void init()
     init_storage();
     init_shell();  
 
-    osThreadAttr_t defaultTask_attributes = { };
-    defaultTask_attributes.name = "task_user_input";
-    defaultTask_attributes.stack_size = 512 * 4;
-    defaultTask_attributes.priority = (osPriority_t) osPriorityNormal;
-
-    task_handle_user_input = osThreadNew(task_user_input, NULL, &defaultTask_attributes);
-}
-
-extern "C" void task_user_input(void *argument)
-{
     for(;;)
     {
         shell.run();
