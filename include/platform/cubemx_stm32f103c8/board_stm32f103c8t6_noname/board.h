@@ -8,4 +8,5 @@ DummyLed_t led2;
 DummyButton_t button1;
 DummyButton_t button2;
 
-#define BOARD_HAS_SD_CARD                   (0)
+#define BOARD_SUPPORT_SD_CARD                   (0)
+#define BOARD_SUPPORT_AUDIO                     (0)
