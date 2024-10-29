@@ -440,9 +440,51 @@ bool shell_cmd_open_wav(FILE *f, ShellCmd_t *cmd, const char *s)
 
 bool shell_cmd_set_volume(FILE *f, ShellCmd_t *cmd, const char *s)
 {
-    g_volume_shift = cmd->get_int_arg(s, 1);
-    fprintf(f, "Volume shift is %d now" ENDL, g_volume_shift);
+    const int VOLUME_SHIFT_MAX = 9;
+    const int VOLUME_SHIFT_MUTE = 16;
+    int volume_table[] = { 100, 80, 60, 40, 20, 10, 5, 3, 2, 1, 0, 0, 0, 0, 0, 0, 0 };
+    if (strcmp(cmd->get_str_arg(s, 1), "+") == 0)
+    {
+        if (g_volume_shift >= VOLUME_SHIFT_MUTE) g_volume_shift = VOLUME_SHIFT_MAX;
+        else if (g_volume_shift > 0) g_volume_shift--;
+    }
+    else if (strcmp(cmd->get_str_arg(s, 1), "-") == 0)
+    {
+        if (g_volume_shift < VOLUME_SHIFT_MAX) g_volume_shift++;
+        else g_volume_shift = VOLUME_SHIFT_MUTE;
+    }
+    else if (strcmp(cmd->get_str_arg(s, 1), "max") == 0)
+    {
+        g_volume_shift = 0;
+    }
+    else if (strcmp(cmd->get_str_arg(s, 1), "min") == 0)
+    {
+        g_volume_shift = VOLUME_SHIFT_MAX;
+    }
+    else if (strcmp(cmd->get_str_arg(s, 1), "mute") == 0)
+    {
+        g_volume_shift = VOLUME_SHIFT_MUTE;
+    }    
+    else
+    {
+        int volume  = cmd->get_int_arg(s, 1);
+        
+        int volume_div = 0;
+        int min_dif = INT32_MAX;
+        for (int i = VOLUME_SHIFT_MUTE; i >= 0; i--)
+        {
+            if (abs(volume_table[i] - volume) < min_dif)
+            {
+                min_dif = abs(volume_table[i] - volume);
+                volume_div = i;
+            }
+        }
+        g_volume_shift = volume_div;
+    }
+    fprintf(f, "Volume now is %d%% (volume shift is %d)" ENDL, volume_table[g_volume_shift], g_volume_shift);
+    return true;
 }
+
 #endif
 
 void init_shell(FILE *device=stdout)
