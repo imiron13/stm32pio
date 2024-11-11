@@ -1,3 +1,12 @@
+/*!
+ * @file hal_wrapper_stm32.h
+ * @brief Wrapper for STM32 HAL interface for different families
+ *
+ * Dependencies: 
+ * - STM32 HAL for different families
+ * - STM32_FAMILY_NAME_STR macro
+ */
+
 #if F0
 #include "stm32f0xx_hal.h"
 #define STM32_FAMILY_NAME_STR       "F0"

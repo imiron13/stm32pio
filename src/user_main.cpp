@@ -1,10 +1,13 @@
 #include "main.h"
 #include <stdio.h>
 #include <string.h>
+#include <memory>
 
+#include <gpio_pin_stm32.h>
 #include <board.h>
 #include <hal_wrapper_stm32.h>
 #include <uart_stdio_stm32.h>
+
 #include <gpio_pin.h>
 #include <led.h>
 #include <button.h>
@@ -12,11 +15,16 @@
 #include <vt100_terminal.h>
 #include <tetris.h>
 #include <usb_vcom_stdio_stm32.h>
+#include <audio_volume_control.h>
+#include <wav_player.h>
 
 #include <FreeRTOS.h>
 #include "task.h"
+#include "queue.h"
 #include "cmsis_os.h"
 #include "usb_device.h"
+
+using namespace std;
 
 #ifndef BOARD_SUPPORT_SD_CARD
 #define BOARD_SUPPORT_SD_CARD                                   (0)
@@ -145,8 +153,11 @@ char current_folder[FF_MAX_LFN] = "/";
 
 bool shell_cmd_ls(FILE *f, ShellCmd_t *cmd, const char *s)
 {
+    
     DIR dir;
+    vTaskSuspendAll();
     int res = f_opendir(&dir, current_folder);
+    xTaskResumeAll();
     if(res != FR_OK) {
        fprintf(f, "f_opendir() failed, res = %d" ENDL, res);
         return false;
@@ -155,6 +166,7 @@ bool shell_cmd_ls(FILE *f, ShellCmd_t *cmd, const char *s)
     FILINFO fileInfo;
     uint32_t totalFiles = 0;
     uint32_t totalDirs = 0;
+    vTaskSuspendAll();
     for(;;) {
        res = f_readdir(&dir, &fileInfo);
        if((res != FR_OK) || (fileInfo.fname[0] == '\0')) {
@@ -169,7 +181,7 @@ bool shell_cmd_ls(FILE *f, ShellCmd_t *cmd, const char *s)
            totalFiles++;
        }
     }
-
+    xTaskResumeAll();
     return true;
 }
 
@@ -271,247 +283,21 @@ bool shell_cmd_test_dac(FILE *f, ShellCmd_t *cmd, const char *s) {
         }
     }
     free(dac_signal);
-    return true;
+    return (res == HAL_OK);
 } 
-
-#include <memory>
-using namespace std;
 
 #define DAC_BUF_NUM_SAMPLES     (4096)
 #define DAC_BUF_SIZE            (DAC_BUF_NUM_SAMPLES * sizeof(int16_t))
 
 bool shell_cmd_open_wav(FILE *f, ShellCmd_t *cmd, const char *s)
 {
-    unique_ptr<uint16_t> signal_buff[2];
-    signal_buff[0].reset(new uint16_t[DAC_BUF_SIZE / 2]);
-    signal_buff[1].reset(new uint16_t[DAC_BUF_SIZE / 2]);
-
     const char* fname = cmd->get_str_arg(s, 1);
-    fprintf(f, "Openning %s..." ENDL, fname);
-    FIL file;
-    FRESULT res = f_open(&file, fname, FA_READ);
-    if(res != FR_OK) {
-        fprintf(f, "f_open() failed, res = %d" ENDL, res);
-        return -1;
-    }
-
-    fprintf(f, "File opened, reading..." ENDL);
-
-    unsigned int bytesRead;
-    uint8_t header[44+34];
-    res = f_read(&file, header, sizeof(header), &bytesRead);
-    if(res != FR_OK) {
-        fprintf(f, "f_read() failed, res = %d" ENDL, res);
-        f_close(&file);
-        return -2;
-    }
-
-    if(memcmp((const char*)header, "RIFF", 4) != 0) {
-        fprintf(f, "Wrong WAV signature at offset 0: "
-                    "0x%02X 0x%02X 0x%02X 0x%02X" ENDL,
-                    header[0], header[1], header[2], header[3]);
-        f_close(&file);
-        return -3;
-    }
-
-    if(memcmp((const char*)header + 8, "WAVEfmt ", 8) != 0) {
-        fprintf(f, "Wrong WAV signature at offset 8!" ENDL);
-        f_close(&file);
-        return -4;
-    }
-    uint32_t data_ofs = 36;
-    if(memcmp((const char*)header + data_ofs, "data", 4) != 0) {
-        if (memcmp((const char*)header + data_ofs, "LIST", 4) == 0)
-        {
-            uint32_t listChunkSize = header[data_ofs + 4] | (header[data_ofs + 5] << 8) |
-                        (header[data_ofs + 6] << 16) | (header[data_ofs + 7] << 24);
-            data_ofs += 8 + listChunkSize;
-        }
-        else
-        {
-            fprintf(f, "Cannot find 'data' subchunk!" ENDL);
-            f_close(&file);
-            return -5;
-        }
-    }
-
-    uint32_t fileSize = 8 + (header[4] | (header[5] << 8) |
-                        (header[6] << 16) | (header[7] << 24));
-    uint32_t headerSizeLeft = header[16] | (header[17] << 8) |
-                              (header[18] << 16) | (header[19] << 24);
-    uint16_t compression = header[20] | (header[21] << 8);
-    uint16_t channelsNum = header[22] | (header[23] << 8);
-    uint32_t sampleRate = header[24] | (header[25] << 8) |
-                          (header[26] << 16) | (header[27] << 24);
-    uint32_t bytesPerSecond = header[28] | (header[29] << 8) |
-                              (header[30] << 16) | (header[31] << 24);
-    uint16_t bytesPerSample = header[32] | (header[33] << 8);
-    uint16_t bitsPerSamplePerChannel = header[34] | (header[35] << 8);
-    uint32_t dataSize = header[data_ofs + 4] | (header[data_ofs + 5] << 8) |
-                        (header[data_ofs + 6] << 16) | (header[data_ofs + 7] << 24);
-
-    fprintf(f, 
-        "--- WAV header ---" ENDL
-        "File size: %lu" ENDL
-        "Header size left: %lu" ENDL
-        "Compression (1 = no compression): %d" ENDL
-        "Channels num: %d" ENDL
-        "Sample rate: %ld" ENDL
-        "Bytes per second: %ld" ENDL
-        "Bytes per sample: %d" ENDL
-        "Bits per sample per channel: %d" ENDL
-        "Data size: %ld" ENDL
-        "------------------" ENDL,
-        fileSize, headerSizeLeft, compression, channelsNum,
-        sampleRate, bytesPerSecond, bytesPerSample,
-        bitsPerSamplePerChannel, dataSize);
-
-    if(headerSizeLeft != 16) {
-        fprintf(f, "Wrong `headerSizeLeft` value, 16 expected" ENDL);
-        f_close(&file);
-        return -6;
-    }
-
-    if(compression != 1) {
-        fprintf(f, "Wrong `compression` value, 1 expected" ENDL);
-        f_close(&file);
-        return -7;
-    }
-
-    if(channelsNum != 2) {
-        fprintf(f, "Wrong `channelsNum` value, 2 expected" ENDL);
-        f_close(&file);
-        return -8;
-    }
-
-    if((sampleRate != 44100) || (bytesPerSample != 4) ||
-       (bitsPerSamplePerChannel != 16) || (bytesPerSecond != 44100*2*2)
-       || (dataSize < DAC_BUF_SIZE + DAC_BUF_SIZE)) {
-        fprintf(f, "Wrong file format, 16 bit file with sample "
-                    "rate 44100 expected" ENDL);
-        f_close(&file);
-        return -9;
-    }
-
-    res = f_read(&file, (uint8_t*)signal_buff[0].get(), DAC_BUF_SIZE,
-                 &bytesRead);
-    if(res != FR_OK) {
-        fprintf(f, "f_read() failed, res = %d" ENDL, res);
-        f_close(&file);
-        return -10;
-    }
-
-    HAL_Delay(10);
-    bool end = false;
-    uint32_t play_buf_idx = 0;
-    while(dataSize >= DAC_BUF_SIZE && !end) {
-        res = f_read(&file, (uint8_t*)signal_buff[!play_buf_idx].get(),
-                     DAC_BUF_SIZE, &bytesRead);
-        int16_t *p = (int16_t*)signal_buff[!play_buf_idx].get();
-        for (int i = 0; i < DAC_BUF_NUM_SAMPLES; i++)
-        {
-            p[i] >>= g_volume_shift;
-        }
-        if(res != FR_OK) {
-            fprintf(f, "f_read() failed, res = %d" ENDL, res);
-            f_close(&file);
-            return -13;
-        }
-        int c = fgetc(f);
-        if (c =='q')
-        {
-            end = true;
-        }
-        while (HAL_I2S_GetState(&hi2s2) == HAL_I2S_STATE_BUSY_TX) { };
-        HAL_StatusTypeDef hal_res = HAL_I2S_Transmit_DMA(&hi2s2, (uint16_t*)signal_buff[!play_buf_idx].get(),
-                                  DAC_BUF_NUM_SAMPLES);
-        play_buf_idx = !play_buf_idx;  
-        dataSize -= DAC_BUF_SIZE;
-    }
-
-    res = f_close(&file);
-    if(res != FR_OK) {
-        fprintf(f, "f_close() failed, res = %d" ENDL, res);
-        return -14;
-    }
-
-    return true;
-}
-
-bool shell_cmd_set_volume(FILE *f, ShellCmd_t *cmd, const char *s)
-{
-    const int VOLUME_SHIFT_MAX = 9;
-    const int VOLUME_SHIFT_MUTE = 16;
-    int volume_table[] = { 100, 80, 60, 40, 20, 10, 5, 3, 2, 1, 0, 0, 0, 0, 0, 0, 0 };
-    if (strcmp(cmd->get_str_arg(s, 1), "+") == 0)
-    {
-        if (g_volume_shift >= VOLUME_SHIFT_MUTE) g_volume_shift = VOLUME_SHIFT_MAX;
-        else if (g_volume_shift > 0) g_volume_shift--;
-    }
-    else if (strcmp(cmd->get_str_arg(s, 1), "-") == 0)
-    {
-        if (g_volume_shift < VOLUME_SHIFT_MAX) g_volume_shift++;
-        else g_volume_shift = VOLUME_SHIFT_MUTE;
-    }
-    else if (strcmp(cmd->get_str_arg(s, 1), "max") == 0)
-    {
-        g_volume_shift = 0;
-    }
-    else if (strcmp(cmd->get_str_arg(s, 1), "min") == 0)
-    {
-        g_volume_shift = VOLUME_SHIFT_MAX;
-    }
-    else if (strcmp(cmd->get_str_arg(s, 1), "mute") == 0)
-    {
-        g_volume_shift = VOLUME_SHIFT_MUTE;
-    }    
-    else
-    {
-        int volume  = cmd->get_int_arg(s, 1);
-        
-        int volume_div = 0;
-        int min_dif = INT32_MAX;
-        for (int i = VOLUME_SHIFT_MUTE; i >= 0; i--)
-        {
-            if (abs(volume_table[i] - volume) < min_dif)
-            {
-                min_dif = abs(volume_table[i] - volume);
-                volume_div = i;
-            }
-        }
-        g_volume_shift = volume_div;
-    }
-    fprintf(f, "Volume now is %d%% (volume shift is %d)" ENDL, volume_table[g_volume_shift], g_volume_shift);
+    TaskPlayWav_t *play_wav = new TaskPlayWav_t;
+    play_wav->start(fname);
     return true;
 }
 
 #endif
-
-void init_shell(FILE *device=stdout)
-{
-    shell.add_command(ShellCmd_t("cls", "Clear screen", shell_cmd_clear_screen));
-#if (EN_TETRIS == 1)
-    shell.add_command(ShellCmd_t("tetris", "Tetris!", shell_cmd_tetris));
-#endif
-#if (EN_SD_CARD_READ_WRITE_SHELL_CMDS == 1)
-    shell.add_command(ShellCmd_t("sdrd", "SD card read", shell_cmd_sd_card_read));
-    shell.add_command(ShellCmd_t("sdwr", "SD card write", shell_cmd_sd_card_write));
-#endif
-#if (EN_FATFS_SHELL_CMDS == 1)
-    shell.add_command(ShellCmd_t("ls", "Print conents of the current directory", shell_cmd_ls));
-    shell.add_command(ShellCmd_t("cd", "Change directory", shell_cmd_cd));
-    shell.add_command(ShellCmd_t("pwd", "Print current directory", shell_cmd_pwd));
-#endif    
-    shell.add_command(ShellCmd_t("led", "LED control", shell_cmd_led));
-
-#if (EN_AUDIO_SHELL_CMDS)    
-    shell.add_command(ShellCmd_t("dac_test", "Test DAC", shell_cmd_test_dac));
-    shell.add_command(ShellCmd_t("openwav", "Open a WAV file", shell_cmd_open_wav));
-    shell.add_command(ShellCmd_t("volume", "Configure audio volume", shell_cmd_set_volume));
-#endif
-    shell.set_device(device);
-    shell.print_prompt();
-}
 
 #if (EN_FATFS == 1)
 bool init_fatfs()
@@ -572,10 +358,329 @@ extern "C" void init()
 {
     osThreadAttr_t defaultTask_attributes = { };
     defaultTask_attributes.name = "task_user_input";
-    defaultTask_attributes.stack_size = 512 * 4;
+    defaultTask_attributes.stack_size = 256 * 4;
     defaultTask_attributes.priority = (osPriority_t) osPriorityNormal;
 
     task_handle_user_input = osThreadNew(task_user_input, NULL, &defaultTask_attributes);
+}
+
+//------------------------------------------------------------------------------
+class AudioPlayerController_t
+{
+public:
+    enum State_t
+    {
+        STOPPED,
+        PAUSED,
+        PLAYING
+    };
+    AudioPlayerController_t();
+    ~AudioPlayerController_t();
+    void playSong(const char *wav_file_name);
+    void playFolder();
+    void pause();
+    void stop();
+    void play();
+    void shuffle();
+    void nextSong();
+    void prevSong();
+    void reserveSongsListCapacity(int capacity);
+    void clearSongsList();
+    bool is_paused();
+
+    void setVolume();
+    void getVolume();
+    void printStat();
+
+    const char *getCurrentSongName();
+    const char *getCurrentSongFileName();
+    int getTimestampMsec();
+    void setTimestampMsec();
+
+private:
+    const char **m_songs_list;
+    int m_num_songs;
+    int m_songs_list_capacity;
+    int m_cur_song_idx;
+    int addSong(const char *wav_file_name);
+    State_t m_state;
+    unique_ptr<TaskPlayWav_t> m_task_play_wav;
+    // in FIFO
+};
+
+AudioPlayerController_t::AudioPlayerController_t()
+    : m_songs_list(nullptr)
+    , m_num_songs(0)
+    , m_songs_list_capacity(0)
+    , m_cur_song_idx(0)
+    , m_state(STOPPED)
+{
+
+}
+
+AudioPlayerController_t::~AudioPlayerController_t()
+{
+    clearSongsList();
+    delete m_songs_list;
+}
+
+void AudioPlayerController_t::printStat()
+{
+    if (m_task_play_wav)
+    {
+        m_task_play_wav->print_stat();
+    }
+}
+
+void AudioPlayerController_t::clearSongsList()
+{
+    for (int i = 0; i < m_num_songs; i++)
+    {
+        delete m_songs_list[i];
+    }
+    m_num_songs = 0;
+}
+
+void AudioPlayerController_t::reserveSongsListCapacity(int capacity)
+{
+    if (m_songs_list_capacity <= capacity)
+    {
+        const char **new_songs_list = new const char*[capacity];
+        for (int i = 0; i < m_songs_list_capacity; i++)
+        {
+            new_songs_list[i] = m_songs_list[i];
+        }
+        if (m_songs_list) delete m_songs_list;
+        m_songs_list = new_songs_list;
+        m_songs_list_capacity = capacity;
+    }
+}
+
+bool AudioPlayerController_t::is_paused()
+{
+    return m_state == PAUSED;
+}
+
+void AudioPlayerController_t::nextSong()
+{
+
+}
+
+void AudioPlayerController_t::playSong(const char *wav_file_name)
+{
+    clearSongsList();
+    reserveSongsListCapacity(1);
+    addSong(wav_file_name);
+    play();
+}
+
+int AudioPlayerController_t::addSong(const char *wav_file_name)
+{
+    int len = strlen(wav_file_name);
+    char *p = new char[len];
+    if (p)
+    {
+        strcpy(p, wav_file_name);
+        m_songs_list[m_num_songs] = p;
+        int song_id = m_num_songs;
+        m_num_songs++;
+        return song_id;
+    }
+    else
+    {
+        printf("Memory allocation failure" ENDL);
+        return INT32_MAX;
+    }
+}
+
+void AudioPlayerController_t::shuffle()
+{
+
+}
+
+void AudioPlayerController_t::pause()
+{
+    if (m_state == PLAYING)
+    {
+        m_task_play_wav->pause();
+        printf("pause" ENDL);
+        m_state = PAUSED;
+    }
+}
+
+void AudioPlayerController_t::play()
+{
+    if (m_state == PAUSED)
+    {
+        m_task_play_wav->unpause();
+        m_state = PLAYING;
+    }
+    else if (m_state == PLAYING)
+    {
+        stop();
+    }
+
+    if (m_state == STOPPED)
+    {
+        printf("play" ENDL);
+        
+        m_task_play_wav = unique_ptr<TaskPlayWav_t>(new TaskPlayWav_t);
+        bool ok = m_task_play_wav->start(getCurrentSongFileName());
+
+        if (ok)
+        {
+            m_state = PLAYING;
+        }
+    }
+
+}
+
+void AudioPlayerController_t::stop()
+{
+    m_task_play_wav->stop();
+    m_task_play_wav.reset();
+    m_state = STOPPED;
+}
+
+int AudioPlayerController_t::getTimestampMsec()
+{
+    return 0;
+}
+
+void AudioPlayerController_t::setTimestampMsec()
+{
+
+}
+
+const char *AudioPlayerController_t::getCurrentSongFileName()
+{
+    return m_songs_list[m_cur_song_idx];
+}
+
+class AudioPlayerTerminalGui_t
+{
+public:
+};
+
+struct AudioPlayerInputs_t
+{
+    Button_t *button_pause;
+    Button_t *button_next;
+};
+
+class AudioPlayerInputHandler_t
+{
+    AudioPlayerController_t *m_controller;
+    AudioPlayerInputs_t m_inp;
+public:
+    AudioPlayerInputHandler_t(AudioPlayerController_t *controller, const AudioPlayerInputs_t &inputs);
+
+    void handle_inputs();
+};
+
+AudioPlayerInputHandler_t::AudioPlayerInputHandler_t(AudioPlayerController_t *controller, const AudioPlayerInputs_t &inputs)
+    : m_controller(controller)
+    , m_inp(inputs)
+{
+}
+
+void AudioPlayerInputHandler_t::handle_inputs()
+{
+    if (m_inp.button_pause->is_pressed_event())
+    {
+        if (m_controller->is_paused())
+        {
+            m_controller->play();
+        }
+        else
+        {
+            m_controller->pause();
+        }
+        m_controller->printStat();
+    }
+
+    if (m_inp.button_next->is_pressed_event())
+    {
+        m_controller->nextSong();
+    }
+}
+
+class AudioPlayer_t
+{
+public:
+    AudioPlayerController_t m_controller;
+    AudioPlayerInputHandler_t m_input_handler;
+
+    AudioPlayer_t(const AudioPlayerInputs_t &inputs);
+};
+
+AudioPlayer_t::AudioPlayer_t(const AudioPlayerInputs_t &inputs)
+    : m_controller()
+    , m_input_handler(&m_controller, inputs)
+{
+
+}
+
+AudioPlayer_t *g_audio_player = nullptr;
+
+//------------------------------------------------------------------------------
+bool shell_cmd_play(FILE *f, ShellCmd_t *cmd, const char *s)
+{
+    if (g_audio_player)
+    {
+        fprintf(f, "Previous song is still playing, stopping..." ENDL);
+        g_audio_player->m_controller.stop();
+        delete g_audio_player;
+    }
+
+    AudioPlayerInputs_t inputs;
+    inputs.button_pause = &button1;
+    inputs.button_next = &button2;
+    g_audio_player = new AudioPlayer_t(inputs);
+
+    const char *fname = cmd->get_str_arg(s, 1);
+    g_audio_player->m_controller.playSong(fname);
+    return true;
+}
+
+bool shell_wav_stat(FILE *f, ShellCmd_t *cmd, const char *s)
+{
+    if (g_audio_player)
+    {
+        g_audio_player->m_controller.printStat();
+        return true;
+    }
+    return false;    
+}
+
+void init_shell(FILE *device=stdout)
+{
+    shell.add_command(ShellCmd_t("cls", "Clear screen", shell_cmd_clear_screen));
+#if (EN_TETRIS == 1)
+    shell.add_command(ShellCmd_t("tetris", "Tetris!", shell_cmd_tetris));
+#endif
+#if (EN_SD_CARD_READ_WRITE_SHELL_CMDS == 1)
+    shell.add_command(ShellCmd_t("sdrd", "SD card read", shell_cmd_sd_card_read));
+    shell.add_command(ShellCmd_t("sdwr", "SD card write", shell_cmd_sd_card_write));
+#endif
+#if (EN_FATFS_SHELL_CMDS == 1)
+    shell.add_command(ShellCmd_t("ls", "Print conents of the current directory", shell_cmd_ls));
+    shell.add_command(ShellCmd_t("cd", "Change directory", shell_cmd_cd));
+    shell.add_command(ShellCmd_t("pwd", "Print current directory", shell_cmd_pwd));
+#endif    
+    shell.add_command(ShellCmd_t("led", "LED control", shell_cmd_led));
+
+#if (EN_AUDIO_SHELL_CMDS)    
+    shell.add_command(ShellCmd_t("dac_test", "Test DAC", shell_cmd_test_dac));
+    shell.add_command(ShellCmd_t("openwav", "Open a WAV file", shell_cmd_open_wav));
+    shell.add_command(ShellCmd_t("volume", "Configure audio volume", shell_cmd_set_volume));
+#endif
+
+    shell.add_command(ShellCmd_t("play", "", shell_cmd_play));
+    shell.add_command(ShellCmd_t("wavstat", "", shell_wav_stat));
+
+    shell.set_device(device);
+    shell.print_prompt();
 }
 
 extern "C" void task_user_input(void *argument)
@@ -629,6 +734,10 @@ extern "C" void task_user_input(void *argument)
             led2.off();
         }
 
+        if (g_audio_player)
+        {
+            g_audio_player->m_input_handler.handle_inputs();
+        }
         osDelay(50);
     }      
 }
