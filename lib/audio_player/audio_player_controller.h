@@ -14,11 +14,11 @@ public:
     };
     AudioPlayerController_t();
     ~AudioPlayerController_t();
-    void playSong(const char *wav_file_name);
+    bool playSong(const char *wav_file_name);
     void playFolder();
     void pause();
     void stop();
-    void play();
+    bool play();
     void shuffle();
     void nextSong();
     void prevSong();

@@ -1,7 +1,8 @@
 #include "main.h"
-#include <stdio.h>
-#include <string.h>
+#include <cstdio>
+#include <cstring>
 #include <memory>
+#include <malloc.h>
 
 #include <gpio_pin_stm32.h>
 #include <board.h>
@@ -12,6 +13,7 @@
 #include <led.h>
 #include <button.h>
 #include <shell.h>
+#include <file_system_utils.h>
 #include <vt100_terminal.h>
 #include <tetris.h>
 #include <usb_vcom_stdio_stm32.h>
@@ -150,96 +152,6 @@ bool shell_cmd_sd_card_write(FILE *f, ShellCmd_t *cmd, const char *s)
 #endif
 
 #if (EN_FATFS_SHELL_CMDS == 1)
-char current_folder[FF_MAX_LFN] = "/";
-
-bool shell_cmd_ls(FILE *f, ShellCmd_t *cmd, const char *s)
-{
-    
-    DIR dir;
-    vTaskSuspendAll();
-    int res = f_opendir(&dir, current_folder);
-    xTaskResumeAll();
-    if(res != FR_OK) {
-       fprintf(f, "f_opendir() failed, res = %d" ENDL, res);
-        return false;
-    }
-
-    FILINFO fileInfo;
-    uint32_t totalFiles = 0;
-    uint32_t totalDirs = 0;
-    vTaskSuspendAll();
-    for(;;) {
-       res = f_readdir(&dir, &fileInfo);
-       if((res != FR_OK) || (fileInfo.fname[0] == '\0')) {
-           break;
-       }
-
-       if(fileInfo.fattrib & AM_DIR) {
-           fprintf(f, "  DIR  %s" ENDL, fileInfo.fname);
-           totalDirs++;
-       } else {
-           fprintf(f, "  FILE %s" ENDL, fileInfo.fname);
-           totalFiles++;
-       }
-    }
-    xTaskResumeAll();
-    return true;
-}
-
-bool shell_cmd_pwd(FILE *f, ShellCmd_t *cmd, const char *s)
-{
-    fprintf(f, "%s" ENDL, current_folder);
-    return true;
-}
-
-bool shell_cmd_cd(FILE *f, ShellCmd_t *cmd, const char *s)
-{
-    bool is_success = true;
-    DIR dir;
-    const char *folder_arg = cmd->get_str_arg(s, 1);
-    char *new_folder = (char*)malloc(FF_MAX_LFN);
-    if (strcmp(folder_arg, "..") == 0)
-    {
-        int i = 0;
-        int slash_pos = 0;
-        while (current_folder[i] != 0)
-        {
-            if (current_folder[i] == '/')
-            {
-                slash_pos = i;
-            }
-            i++;
-        }
-        if (slash_pos == 0) slash_pos = 1;
-        current_folder[slash_pos] = 0;
-    }
-    else
-    {
-        if (folder_arg[0] != '/')
-        {
-            strcpy(new_folder, current_folder);
-            if (current_folder[strlen(current_folder)- 1] != '/')
-            {
-                strcat(new_folder, "/");
-            }
-        }
-
-        strcat(new_folder, folder_arg);
-        int res = f_opendir(&dir, new_folder);
-
-        if(res != FR_OK) {
-            fprintf(f, "Invalid path" ENDL);
-            is_success = false;
-        }
-        else
-        {
-            strcpy(current_folder, new_folder);
-
-        }
-    }
-    free(new_folder);
-    return is_success;
-}
 #endif
 
 #if (EN_AUDIO_SHELL_CMDS == 1)
@@ -254,7 +166,7 @@ bool shell_cmd_test_dac(FILE *f, ShellCmd_t *cmd, const char *s) {
     int16_t *dac_signal = (int16_t*)malloc(nsamples * sizeof(int16_t));
     if (dac_signal == NULL)
     {
-        fprintf(f, "Heap alloc error\n");
+        fprintf(f, "Heap alloc error" ENDL);
         return false;
     }
 
@@ -381,6 +293,7 @@ bool shell_cmd_play(FILE *f, ShellCmd_t *cmd, const char *s)
         fprintf(f, "Previous song is still playing, stopping..." ENDL);
         g_audio_player->m_controller.stop();
         delete g_audio_player;
+        g_audio_player = nullptr;
     }
 
     AudioPlayerInputs_t inputs;
@@ -389,8 +302,13 @@ bool shell_cmd_play(FILE *f, ShellCmd_t *cmd, const char *s)
     g_audio_player = new AudioPlayer_t(inputs);
 
     const char *fname = cmd->get_str_arg(s, 1);
-    g_audio_player->m_controller.playSong(fname);
-    return true;
+    bool res = g_audio_player->m_controller.playSong(fname);
+    if (!res)
+    {
+        delete g_audio_player;
+        g_audio_player = nullptr;
+    }
+    return res;
 }
 
 bool shell_wav_stat(FILE *f, ShellCmd_t *cmd, const char *s)
@@ -401,6 +319,22 @@ bool shell_wav_stat(FILE *f, ShellCmd_t *cmd, const char *s)
         return true;
     }
     return false;    
+}
+
+bool shell_heap_stat(FILE *f, ShellCmd_t *cmd, const char *s)
+{
+    struct mallinfo heap_info = mallinfo();
+    fprintf(f, "arena=%d" ENDL, heap_info.arena);
+    fprintf(f, "ordblks=%d" ENDL, heap_info.ordblks);
+    fprintf(f, "smblks=%d" ENDL, heap_info.smblks);
+    fprintf(f, "hblks=%d" ENDL, heap_info.hblks);
+    fprintf(f, "hblkhd=%d" ENDL, heap_info.hblkhd);
+    fprintf(f, "usmblks=%d" ENDL, heap_info.usmblks);
+    fprintf(f, "fsmblks=%d" ENDL, heap_info.fsmblks);
+    fprintf(f, "uordblks=%d" ENDL, heap_info.uordblks);
+    fprintf(f, "fordblks=%d" ENDL, heap_info.fordblks);
+    fprintf(f, "keepcost=%d" ENDL, heap_info.keepcost);
+    return true;
 }
 
 void init_shell(FILE *device=stdout)
@@ -428,6 +362,7 @@ void init_shell(FILE *device=stdout)
 
     shell.add_command(ShellCmd_t("play", "", shell_cmd_play));
     shell.add_command(ShellCmd_t("wavstat", "", shell_wav_stat));
+    shell.add_command(ShellCmd_t("heap", "", shell_heap_stat));
 
     shell.set_device(device);
     shell.print_prompt();

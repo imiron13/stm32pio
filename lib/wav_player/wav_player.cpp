@@ -19,7 +19,8 @@ extern "C" void task_play_wav(void *arg)
 }
 
 TaskPlayWav_t::TaskPlayWav_t(size_t dac_buf_size, UBaseType_t prio, FILE *con)
-    : m_dac_buf_size(dac_buf_size)
+    : m_audio_task_id(NULL)
+    , m_dac_buf_size(dac_buf_size)
     , m_dac_buf_num_samples(dac_buf_size / sizeof(int16_t))
     , m_prio(prio)
     , m_console(con)
@@ -56,7 +57,13 @@ bool TaskPlayWav_t::start(const char *fname)
 
 void TaskPlayWav_t::stop()
 {
-    vTaskDelete(m_audio_task_id);
+    if (m_audio_task_id)
+    {
+        vTaskDelete(m_audio_task_id);
+        signal_buff[0].reset();
+        signal_buff[1].reset();
+        m_audio_task_id = NULL;
+    }
 }
 
 void TaskPlayWav_t::pause()
@@ -191,7 +198,6 @@ void TaskPlayWav_t::task_play_wav_body()
 {
     unsigned int bytesRead;
 
-    std::unique_ptr<uint16_t> signal_buff[2];
     signal_buff[0].reset(new uint16_t[m_dac_buf_size / 2]);
     signal_buff[1].reset(new uint16_t[m_dac_buf_size / 2]);
 

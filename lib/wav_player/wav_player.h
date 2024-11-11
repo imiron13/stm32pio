@@ -66,6 +66,7 @@ private:
     int read_header(const char *fname);
     void send_response(QueueHandle_t rsp_q, ResponseId_t rsp_id, int arg);
 
+    std::unique_ptr<uint16_t> signal_buff[2];
     FIL m_wav_file;
     Args_t m_args;
     QueueHandle_t m_req_h;

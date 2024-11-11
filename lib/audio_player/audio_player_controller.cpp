@@ -60,12 +60,12 @@ void AudioPlayerController_t::nextSong()
 
 }
 
-void AudioPlayerController_t::playSong(const char *wav_file_name)
+bool AudioPlayerController_t::playSong(const char *wav_file_name)
 {
     clearSongsList();
     reserveSongsListCapacity(1);
     addSong(wav_file_name);
-    play();
+    return play();
 }
 
 int AudioPlayerController_t::addSong(const char *wav_file_name)
@@ -102,12 +102,13 @@ void AudioPlayerController_t::pause()
     }
 }
 
-void AudioPlayerController_t::play()
+bool AudioPlayerController_t::play()
 {
     if (m_state == PAUSED)
     {
         m_task_play_wav->unpause();
         m_state = PLAYING;
+        return true;
     }
     else if (m_state == PLAYING)
     {
@@ -124,16 +125,27 @@ void AudioPlayerController_t::play()
         if (ok)
         {
             m_state = PLAYING;
+            return true;
+        }
+        else
+        {
+            return false;
         }
     }
-
+    else
+    {
+        return false;
+    }
 }
 
 void AudioPlayerController_t::stop()
 {
-    m_task_play_wav->stop();
-    m_task_play_wav.reset();
-    m_state = STOPPED;
+    if (m_task_play_wav)
+    {
+        m_task_play_wav->stop();
+        m_task_play_wav.reset();
+        m_state = STOPPED;
+    }
 }
 
 int AudioPlayerController_t::getTimestampMsec()
