@@ -1,0 +1,41 @@
+@startuml Libraries Dependency Diagram
+
+[gpio_pin_stm32] --> [gpio_pin]
+[button] --> [gpio_pin]
+[led] --> [gpio_pin]
+[file_system_utils] --> [fatfs]
+[file_system_utils] --> [shell]
+[audio_volume_control] --> [shell]
+[tetris] --> [vt100_terminal]
+
+[fatfs] --> [sdcard]
+[sdcard] --> [stm32_hal]
+
+[wav_player] --> [free_rtos]
+[wav_player] --> [fatfs]
+[wav_player] --> [audio_volume_control]
+[wav_player] --> [i2s]
+[i2s] --> [stm32_hal]
+
+[audio_player] --> [audio_player_ctrl]
+[audio_player] --> [audio_player_inp]
+[audio_player] --> [audio_player_vtui]
+[audio_player] --> [audio_player_gui]
+[audio_player] --> [file_system_utils]
+
+[audio_player_ctrl] --> [wav_player]
+[audio_player_inp] --> [button]
+
+[audio_player_vtui] --> [vt100_terminal]
+[audio_player_gui] --> [lvgl]
+
+[ili9341] --> [stm32_hal]
+[lvgl] --> [ili9341]
+
+[bsp] --> [button]
+[bsp] --> [gpio_pin_stm32]
+[bsp] --> [led]
+
+[gpio_pin_stm32] --> [stm32_hal]
+
+@enduml
