@@ -8,9 +8,11 @@ class AudioPlayerController_t
 public:
     enum State_t
     {
-        STOPPED,
+        IDLE,
+        READING_HEADER,
+        PLAYING,
         PAUSED,
-        PLAYING
+        FINISHED
     };
     AudioPlayerController_t();
     ~AudioPlayerController_t();
@@ -25,6 +27,7 @@ public:
     void reserveSongsListCapacity(int capacity);
     void clearSongsList();
     bool is_paused();
+    State_t getState();
 
     void setVolume();
     void getVolume();
@@ -42,5 +45,5 @@ private:
     int m_cur_song_idx;
     int addSong(const char *wav_file_name);
     State_t m_state;
-    std::unique_ptr<TaskPlayWav_t> m_task_play_wav;
+    std::unique_ptr<WavPlayer_t> m_task_play_wav;
 };

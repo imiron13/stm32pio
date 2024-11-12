@@ -14,37 +14,42 @@ extern I2S_HandleTypeDef hi2s2;
 
 extern "C" void task_play_wav(void *arg)
 {
-    TaskPlayWav_t *play_wav = (TaskPlayWav_t*)arg;
+    WavPlayer_t *play_wav = (WavPlayer_t*)arg;
     play_wav->task_play_wav_body();
 }
 
-TaskPlayWav_t::TaskPlayWav_t(size_t dac_buf_size, UBaseType_t prio, FILE *con)
-    : m_audio_task_id(NULL)
+WavPlayer_t::WavPlayer_t(size_t dac_buf_size, UBaseType_t prio, FILE *con)
+    : m_state(IDLE)
+    , m_audio_task_id(NULL)
     , m_dac_buf_size(dac_buf_size)
     , m_dac_buf_num_samples(dac_buf_size / sizeof(int16_t))
     , m_prio(prio)
     , m_console(con)
 {
-    m_req_h = xQueueCreate(16, sizeof(Request_t));
-    m_rsp_q = xQueueCreate(16, sizeof(Response_t));
 }
 
-TaskPlayWav_t::~TaskPlayWav_t()
+WavPlayer_t::~WavPlayer_t()
 {
     f_close(&m_wav_file);
-    vQueueDelete(m_req_h);
-    vQueueDelete(m_rsp_q);
 }
 
-bool TaskPlayWav_t::start(const char *fname)
+WavPlayer_t::State_t WavPlayer_t::get_state()
 {
+    return m_state;
+}
+
+bool WavPlayer_t::start(const char *fname)
+{
+    m_state = READING_HEADER;
     int res = read_header(fname);
     if (res >= 0)
     {
         m_data_size = res;
+        m_data_size_left = res;
 
         fprintf(m_console, "Creating a task to play wav file" ENDL);
-
+        
+        m_state = PLAYING;
         BaseType_t res = xTaskCreate(task_play_wav, "task_play_wav", 256, this, m_prio, &m_audio_task_id);
         return (res == pdPASS);
     }
@@ -55,7 +60,7 @@ bool TaskPlayWav_t::start(const char *fname)
     }
 }
 
-void TaskPlayWav_t::stop()
+void WavPlayer_t::stop()
 {
     if (m_audio_task_id)
     {
@@ -63,28 +68,23 @@ void TaskPlayWav_t::stop()
         signal_buff[0].reset();
         signal_buff[1].reset();
         m_audio_task_id = NULL;
+        m_state = IDLE;
     }
 }
 
-void TaskPlayWav_t::pause()
+void WavPlayer_t::pause()
 {
     vTaskSuspend(m_audio_task_id);
+    m_state = PAUSED;
 }
 
-void TaskPlayWav_t::unpause()
+void WavPlayer_t::unpause()
 {
     vTaskResume(m_audio_task_id);
+    m_state = PLAYING;
 }
 
-void TaskPlayWav_t::send_response(QueueHandle_t rsp_q, ResponseId_t rsp_id, int arg)
-{
-    Response_t rsp;
-    rsp.rsp_id = rsp_id; 
-    rsp.arg = arg;
-    xQueueSendToBack(rsp_q, &rsp, portMAX_DELAY);
-}
-
-int TaskPlayWav_t::read_header(const char *fname)
+int WavPlayer_t::read_header(const char *fname)
 {
     fprintf(m_console, "Opening %s..." ENDL, fname);
     FRESULT res = f_open(&m_wav_file, fname, FA_READ);
@@ -194,7 +194,7 @@ int TaskPlayWav_t::read_header(const char *fname)
     return dataSize;
 }
 
-void TaskPlayWav_t::task_play_wav_body()
+void WavPlayer_t::task_play_wav_body()
 {
     unsigned int bytesRead;
 
@@ -203,78 +203,99 @@ void TaskPlayWav_t::task_play_wav_body()
 
     FRESULT res = f_read(&m_wav_file, (uint8_t*)signal_buff[0].get(), m_dac_buf_size,
                  &bytesRead);
-    if(res != FR_OK) {
+
+    if (res != FR_OK) {
         fprintf(m_console, "f_read() failed, res = %d" ENDL, res);
         f_close(&m_wav_file);
-        send_response(m_rsp_q, TASK_PLAY_WAV_RSP_ID_TERMINATE_WITH_ERROR, -10);
     }
-    m_data_size_left = m_data_size;
+    else
+    {
+        vTaskDelay(10);
+        bool end = false;
+        uint32_t play_buf_idx = 0;
+        size_t delay_msec = 1000 * (uint64_t)m_dac_buf_size / m_bytes_per_sec;
+        if (delay_msec >= 3) delay_msec -= 2;
 
-    vTaskDelay(10);
-    bool end = false;
-    uint32_t play_buf_idx = 0;
-    size_t delay_msec = 1000 * (uint64_t)m_dac_buf_size / m_bytes_per_sec;
-    if (delay_msec >= 3) delay_msec -= 2;
+        while (m_data_size_left >= m_dac_buf_size && !end) {
+            vTaskSuspendAll();
+            res = f_read(&m_wav_file, (uint8_t*)signal_buff[!play_buf_idx].get(),
+                        m_dac_buf_size, &bytesRead);
+            xTaskResumeAll();
+            int16_t *p = (int16_t*)signal_buff[!play_buf_idx].get();
 
-    while (m_data_size_left >= m_dac_buf_size && !end) {
-        vTaskSuspendAll();
-        res = f_read(&m_wav_file, (uint8_t*)signal_buff[!play_buf_idx].get(),
-                     m_dac_buf_size, &bytesRead);
-        xTaskResumeAll();
-        int16_t *p = (int16_t*)signal_buff[!play_buf_idx].get();
+            int volume_divider = g_volume.get_divider();
+            for (size_t i = 0; i < m_dac_buf_num_samples; i++)
+            {
+                p[i] >>= volume_divider;
+            }
+            if(res != FR_OK) {
+                fprintf(m_console, "f_read() failed, res = %d" ENDL, res);
+                f_close(&m_wav_file);
+                break;
+            }
 
-        int volume_divider = g_volume.get_divider();
-        for (size_t i = 0; i < m_dac_buf_num_samples; i++)
-        {
-            p[i] >>= volume_divider;
+            while (HAL_I2S_GetState(&hi2s2) == HAL_I2S_STATE_BUSY_TX) { };
+            HAL_StatusTypeDef hal_res = HAL_I2S_Transmit_DMA(&hi2s2, (uint16_t*)signal_buff[!play_buf_idx].get(),
+                                    m_dac_buf_num_samples);
+            vTaskDelay(delay_msec);
+
+            play_buf_idx = !play_buf_idx;  
+            m_data_size_left -= m_dac_buf_size;
         }
+
+        res = f_close(&m_wav_file);
         if(res != FR_OK) {
-            fprintf(m_console, "f_read() failed, res = %d" ENDL, res);
-            f_close(&m_wav_file);
-            send_response(m_rsp_q, TASK_PLAY_WAV_RSP_ID_TERMINATE_WITH_ERROR, -10);
+            fprintf(m_console, "f_close() failed, res = %d" ENDL, res);
         }
-
-        while (HAL_I2S_GetState(&hi2s2) == HAL_I2S_STATE_BUSY_TX) { };
-        HAL_StatusTypeDef hal_res = HAL_I2S_Transmit_DMA(&hi2s2, (uint16_t*)signal_buff[!play_buf_idx].get(),
-                                  m_dac_buf_num_samples);
-        vTaskDelay(delay_msec);
-
-        play_buf_idx = !play_buf_idx;  
-        m_data_size_left -= m_dac_buf_size;
     }
 
-    res = f_close(&m_wav_file);
-    if(res != FR_OK) {
-        fprintf(m_console, "f_close() failed, res = %d" ENDL, res);
-        send_response(m_rsp_q, TASK_PLAY_WAV_RSP_ID_TERMINATE_WITH_ERROR, -14);
-
-    }
-    send_response(m_rsp_q, TASK_PLAY_WAV_RSP_ID_TERMINATE_NORMALLY, 0);
+    stop();
     vTaskDelay(portMAX_DELAY);
     for (;;);
 }
 
-int TaskPlayWav_t::get_duration_ms()
+int WavPlayer_t::get_duration_ms()
 {
-    return 1000 * (uint64_t)m_data_size / m_bytes_per_sec;
+    if (m_state == PLAYING || m_state == PAUSED)
+    {
+        return 1000 * (uint64_t)m_data_size / m_bytes_per_sec;
+    }
+    else
+    {
+        return 0;
+    }        
 }
 
-int TaskPlayWav_t::get_time_pos_ms()
+int WavPlayer_t::get_time_pos_ms()
 {
-    size_t total_duration = get_duration_ms();
-    size_t left = get_time_left_ms();
-    return total_duration - left;
+    if (m_state == PLAYING || m_state == PAUSED)
+    {
+        size_t total_duration = get_duration_ms();
+        size_t left = get_time_left_ms();
+        return total_duration - left;
+    }
+    else
+    {
+        return 0;
+    }
 }
 
-int TaskPlayWav_t::get_time_left_ms()
+int WavPlayer_t::get_time_left_ms()
 {
-    vTaskSuspendAll();
-    size_t data_size_left = m_data_size_left;
-    xTaskResumeAll();
-    return 1000 * (uint64_t)data_size_left / m_bytes_per_sec;
+    if (m_state == PLAYING || m_state == PAUSED)
+    {
+        vTaskSuspendAll();
+        size_t data_size_left = m_data_size_left;
+        xTaskResumeAll();
+        return 1000 * (uint64_t)data_size_left / m_bytes_per_sec;
+    }
+    else
+    {
+        return 0;
+    }
 }
 
-void TaskPlayWav_t::print_stat()
+void WavPlayer_t::print_stat()
 {
     size_t total = get_duration_ms() / 1000;
     size_t cur = get_time_pos_ms() / 1000;

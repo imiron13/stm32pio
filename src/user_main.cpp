@@ -202,14 +202,6 @@ bool shell_cmd_test_dac(FILE *f, ShellCmd_t *cmd, const char *s) {
 #define DAC_BUF_NUM_SAMPLES     (4096)
 #define DAC_BUF_SIZE            (DAC_BUF_NUM_SAMPLES * sizeof(int16_t))
 
-bool shell_cmd_open_wav(FILE *f, ShellCmd_t *cmd, const char *s)
-{
-    const char* fname = cmd->get_str_arg(s, 1);
-    TaskPlayWav_t *play_wav = new TaskPlayWav_t;
-    play_wav->start(fname);
-    return true;
-}
-
 #endif
 
 #if (EN_FATFS == 1)
@@ -288,6 +280,15 @@ AudioPlayer_t *g_audio_player = nullptr;
 //------------------------------------------------------------------------------
 bool shell_cmd_play(FILE *f, ShellCmd_t *cmd, const char *s)
 {
+    const char *fname = cmd->get_str_arg(s, 1);
+    static char *abs_path = nullptr;
+     
+    if (!abs_path) abs_path = new char[FF_MAX_LFN];
+    abs_path[0] = 0;
+    bool is_success = FileSystemUtils_t::relativePathToAbsolute(fname, abs_path);
+    fprintf(f, "Abs path: %s" ENDL, abs_path);
+    if (!is_success) return false;
+
     if (g_audio_player)
     {
         fprintf(f, "Previous song is still playing, stopping..." ENDL);
@@ -301,12 +302,16 @@ bool shell_cmd_play(FILE *f, ShellCmd_t *cmd, const char *s)
     inputs.button_next = &button2;
     g_audio_player = new AudioPlayer_t(inputs);
 
-    const char *fname = cmd->get_str_arg(s, 1);
-    bool res = g_audio_player->m_controller.playSong(fname);
+    bool res = g_audio_player->m_controller.playSong(abs_path);
     if (!res)
     {
         delete g_audio_player;
         g_audio_player = nullptr;
+        if (abs_path) 
+        {
+            delete abs_path;
+            abs_path = nullptr;
+        }
     }
     return res;
 }
@@ -324,16 +329,16 @@ bool shell_wav_stat(FILE *f, ShellCmd_t *cmd, const char *s)
 bool shell_heap_stat(FILE *f, ShellCmd_t *cmd, const char *s)
 {
     struct mallinfo heap_info = mallinfo();
-    fprintf(f, "arena=%d" ENDL, heap_info.arena);
-    fprintf(f, "ordblks=%d" ENDL, heap_info.ordblks);
-    fprintf(f, "smblks=%d" ENDL, heap_info.smblks);
-    fprintf(f, "hblks=%d" ENDL, heap_info.hblks);
-    fprintf(f, "hblkhd=%d" ENDL, heap_info.hblkhd);
-    fprintf(f, "usmblks=%d" ENDL, heap_info.usmblks);
-    fprintf(f, "fsmblks=%d" ENDL, heap_info.fsmblks);
-    fprintf(f, "uordblks=%d" ENDL, heap_info.uordblks);
-    fprintf(f, "fordblks=%d" ENDL, heap_info.fordblks);
-    fprintf(f, "keepcost=%d" ENDL, heap_info.keepcost);
+    fprintf(f, "arena=%d" ENDL, heap_info.arena);  /* Non-mmapped space allocated (bytes) */
+    fprintf(f, "ordblks=%d" ENDL, heap_info.ordblks);  /* Number of free chunks */
+    fprintf(f, "smblks=%d" ENDL, heap_info.smblks);  /* Number of free fastbin blocks */
+    fprintf(f, "hblks=%d" ENDL, heap_info.hblks);  /* Number of mmapped regions */
+    fprintf(f, "hblkhd=%d" ENDL, heap_info.hblkhd);  /* Space allocated in mmapped regions (bytes) */
+    fprintf(f, "usmblks=%d" ENDL, heap_info.usmblks);  /* Maximum total allocated space (bytes) */
+    fprintf(f, "fsmblks=%d" ENDL, heap_info.fsmblks);  /* Space in freed fastbin blocks (bytes) */
+    fprintf(f, "uordblks=%d" ENDL, heap_info.uordblks);  /* Total allocated space (bytes) */
+    fprintf(f, "fordblks=%d" ENDL, heap_info.fordblks);  /* Total free space (bytes) */
+    fprintf(f, "keepcost=%d" ENDL, heap_info.keepcost);  /* Top-most, releasable space (bytes) */
     return true;
 }
 
@@ -348,20 +353,19 @@ void init_shell(FILE *device=stdout)
     shell.add_command(ShellCmd_t("sdwr", "SD card write", shell_cmd_sd_card_write));
 #endif
 #if (EN_FATFS_SHELL_CMDS == 1)
-    shell.add_command(ShellCmd_t("ls", "Print conents of the current directory", shell_cmd_ls));
-    shell.add_command(ShellCmd_t("cd", "Change directory", shell_cmd_cd));
-    shell.add_command(ShellCmd_t("pwd", "Print current directory", shell_cmd_pwd));
+    shell.add_command(ShellCmd_t("ls", "Print conents of the current directory", FileSystemUtils_t::shell_cmd_ls));
+    shell.add_command(ShellCmd_t("cd", "Change directory", FileSystemUtils_t::shell_cmd_cd));
+    shell.add_command(ShellCmd_t("pwd", "Print current directory", FileSystemUtils_t::shell_cmd_pwd));
 #endif    
     shell.add_command(ShellCmd_t("led", "LED control", shell_cmd_led));
 
 #if (EN_AUDIO_SHELL_CMDS)    
     shell.add_command(ShellCmd_t("dac_test", "Test DAC", shell_cmd_test_dac));
-    shell.add_command(ShellCmd_t("openwav", "Open a WAV file", shell_cmd_open_wav));
     shell.add_command(ShellCmd_t("volume", "Configure audio volume", shell_cmd_set_volume));
-#endif
-
     shell.add_command(ShellCmd_t("play", "", shell_cmd_play));
     shell.add_command(ShellCmd_t("wavstat", "", shell_wav_stat));
+#endif
+
     shell.add_command(ShellCmd_t("heap", "", shell_heap_stat));
 
     shell.set_device(device);

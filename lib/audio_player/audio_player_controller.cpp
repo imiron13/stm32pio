@@ -7,7 +7,7 @@ AudioPlayerController_t::AudioPlayerController_t()
     , m_num_songs(0)
     , m_songs_list_capacity(0)
     , m_cur_song_idx(0)
-    , m_state(STOPPED)
+    , m_state(IDLE)
 {
 
 }
@@ -115,11 +115,11 @@ bool AudioPlayerController_t::play()
         stop();
     }
 
-    if (m_state == STOPPED)
+    if (m_state == IDLE)
     {
         printf("play" ENDL);
         
-        m_task_play_wav = std::unique_ptr<TaskPlayWav_t>(new TaskPlayWav_t);
+        m_task_play_wav = std::unique_ptr<WavPlayer_t>(new WavPlayer_t);
         bool ok = m_task_play_wav->start(getCurrentSongFileName());
 
         if (ok)
@@ -144,7 +144,7 @@ void AudioPlayerController_t::stop()
     {
         m_task_play_wav->stop();
         m_task_play_wav.reset();
-        m_state = STOPPED;
+        m_state = IDLE;
     }
 }
 
@@ -161,4 +161,17 @@ void AudioPlayerController_t::setTimestampMsec()
 const char *AudioPlayerController_t::getCurrentSongFileName()
 {
     return m_songs_list[m_cur_song_idx];
+}
+
+AudioPlayerController_t::State_t AudioPlayerController_t::getState()
+{
+    return m_state;
+    /*if (m_task_play_wav)
+    {
+        return WavPlayer_t::IDLE;
+    }
+    else
+    {
+        return m_task_play_wav->get_state();
+    }*/
 }
