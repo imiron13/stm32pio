@@ -64,11 +64,13 @@ void WavPlayer_t::stop()
 {
     if (m_audio_task_id)
     {
-        vTaskDelete(m_audio_task_id);
         signal_buff[0].reset();
         signal_buff[1].reset();
+        TaskHandle_t task_id = m_audio_task_id;
         m_audio_task_id = NULL;
         m_state = IDLE;
+
+        vTaskDelete(task_id);  // this may terminate the current thread
     }
 }
 
