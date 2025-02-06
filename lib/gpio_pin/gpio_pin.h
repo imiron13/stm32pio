@@ -25,6 +25,9 @@ public:
         return read();
     }
 
+    virtual void config_output() = 0;
+    virtual void config_input() = 0;
+
     virtual void write(bool is_high) = 0;
     virtual bool read() = 0;
 };
@@ -43,6 +46,16 @@ public:
     virtual bool read()
     {
         return GPIO_PIN_TEMPLATE::read();
+    }
+
+    virtual void config_output()
+    {
+        GPIO_PIN_TEMPLATE::config_output();
+    }
+
+    virtual void config_input()
+    {
+        GPIO_PIN_TEMPLATE::config_input();
     }
 };
 
@@ -65,6 +78,14 @@ public:
     {
         return false;
     }
+
+    virtual void config_output()
+    {
+    }
+
+    virtual void config_input()
+    {
+    }
 };
 
 class DummyGpioPinAlwaysHigh_t : public GpioPinInterface_t
@@ -79,5 +100,13 @@ public:
     virtual bool read()
     {
         return true;
+    }
+
+    virtual void config_output()
+    {
+    }
+
+    virtual void config_input()
+    {
     }
 };

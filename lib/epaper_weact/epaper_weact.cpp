@@ -5,7 +5,27 @@
 #include <stdio.h>
 #include <intrinsics.h>
 
-EpaperWeAct_Driver_t::EpaperWeAct_Driver_t()
+BinaryScreenBuffer_t::BinaryScreenBuffer_t(int width, int height)
+    : m_width(width)
+    , m_height(height)
+{
+}
+
+void BinaryScreenBuffer_t::set_pixel(int x, int y, bool color)
+{
+    uint8_t mask = 1 << (x & 0x07);
+    if (color)
+    {
+        mem_write(x / 8, y, mask);
+    }
+    else
+    {
+        mem_write(x / 8, y, ~mask);
+    }
+}
+
+EpaperWeAct_Driver_t::EpaperWeAct_Driver_t(int width, int height)
+    : BinaryScreenBuffer_t(width, height)
 {
 }
 
@@ -107,7 +127,8 @@ void EpaperWeAct_Driver_t::send_data(uint8_t data)
 uint8_t EpaperWeAct_Driver_t::read_data()
 {
     select_data();
-    return read_byte();
+    uint8_t data = read_byte();
+    return data;
 }
 
 void EpaperWeAct_Driver_t::wait_idle()
@@ -268,9 +289,13 @@ void EpaperWeAct_Driver_t::init()
     set_resolution();
 
     send(CMD_BORDER_WAVEFORM_CONTROL, 0x05);
+    send(0x18, 0x48);
 
     // 4. Load Waveform LUT
     send(CMD_DISPLAY_UPDATE_CONTROL_1, 0x40, 0x00);  // Display update control
+    send(CMD_DISPLAY_UPDATE_CONTROL_2, 0xB1);  // Display update control
+    send(CMD_REFRESH);  // Activate Display Update Sequence
+    wait_idle();
 
     send(CMD_MEM_READ_OPTIONS, 0x00, 0x08, 0x16);  // Memory read options
     set_xy(0, 0);
@@ -339,6 +364,21 @@ void EpaperWeAct_Driver_t::mem_write(int x, int y, uint8_t data)
     mem_write(data);
 }
 
+uint8_t EpaperWeAct_Driver_t::mem_read()
+{
+    select_cs();
+    send_command(CMD_MEM_READ);
+    uint8_t data = read_data();
+    deselect_cs();
+    return data;
+}
+
+uint8_t EpaperWeAct_Driver_t::mem_read(int x, int y)
+{
+    set_xy(x, y);
+    return mem_read();
+}
+
 void EpaperWeAct_Driver_t::draw_pattern_sw(int pattern_id)
 {
     set_xy(0, 0);
@@ -364,7 +404,8 @@ void EpaperWeAct_Driver_t::update(bool full_refresh)
     }
     else
     {
-        send(CMD_DISPLAY_UPDATE_CONTROL_2, 0xC7);  // Partial update
+        //send(CMD_DISPLAY_UPDATE_CONTROL_2, 0xC7);  // Partial update
+        send(CMD_DISPLAY_UPDATE_CONTROL_2, 0xCF);  // Partial update
     }
 
     send(CMD_REFRESH);  // Activate Display Update Sequence

@@ -20,13 +20,15 @@ enum GpioPortId_t
     GPIO_PORT_ID_C,
     GPIO_PORT_ID_D,
     GPIO_PORT_ID_E,
+    GPIO_PORT_ID_F,
+    GPIO_PORT_ID_G,
     GPIO_PORT_ID_DUMMY = INT32_MAX
 };
 
 template<GpioPortId_t port_id, int pin_id>
 class GpioPinTemplate_t
 {
-    constexpr static GPIO_TypeDef *const gpio[5] = { GPIOA, GPIOB, GPIOC, GPIOD, GPIOE };
+    constexpr static GPIO_TypeDef *const gpio[7] = { GPIOA, GPIOB, GPIOC, GPIOD, GPIOE, GPIOF, GPIOG };
 public:
     static void write_high()
     {
@@ -53,6 +55,25 @@ public:
     {
         return read();
     }
+
+    static void config_output()
+    {
+        GPIO_InitTypeDef GPIO_InitStruct = {0};
+        GPIO_InitStruct.Pin = 1U << pin_id;
+        GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+        GPIO_InitStruct.Pull = GPIO_NOPULL;
+        GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+        HAL_GPIO_Init(gpio[port_id], &GPIO_InitStruct);
+    }
+
+    static void config_input()
+    {
+        GPIO_InitTypeDef GPIO_InitStruct = {0};
+        GPIO_InitStruct.Pin = 1U << pin_id;
+        GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+        GPIO_InitStruct.Pull = GPIO_NOPULL;
+        HAL_GPIO_Init(gpio[port_id], &GPIO_InitStruct);
+    }
 };
 
 //template<int PIN_ID>
@@ -73,3 +94,9 @@ using GpioPinPortD_t = GpioPin_t<GpioPinTemplate_t<GPIO_PORT_ID_D, PIN_ID>>;
 
 template <size_t PIN_ID>
 using GpioPinPortE_t = GpioPin_t<GpioPinTemplate_t<GPIO_PORT_ID_E, PIN_ID>>;
+
+template <size_t PIN_ID>
+using GpioPinPortF_t = GpioPin_t<GpioPinTemplate_t<GPIO_PORT_ID_F, PIN_ID>>;
+
+template <size_t PIN_ID>
+using GpioPinPortG_t = GpioPin_t<GpioPinTemplate_t<GPIO_PORT_ID_G, PIN_ID>>;

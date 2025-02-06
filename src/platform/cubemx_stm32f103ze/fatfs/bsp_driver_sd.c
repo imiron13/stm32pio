@@ -63,8 +63,14 @@ __weak uint8_t BSP_SD_Init(void)
   hsd.Init.ClockDiv = 2;
 
   sd_state = HAL_SD_Init(&hsd);
-  hsd.Init.BusWide = SDIO_BUS_WIDE_4B;
+  //hsd.Init.BusWide = SDIO_BUS_WIDE_4B;
   
+  /* Drop the clock to low sped when changing CKLCR for 4-bit mode
+   * See https://community.st.com/t5/stm32cubemx-mcus/stm32l4-sd-stm32cubemx-v5-0-0-sd-clock-speed-during-call-to/td-p/371550
+   * Calling SDIO_Init(), using the same settings as HAL_SD_InitCard(), will work here as well
+   */
+    //MODIFY_REG(hsd.Instance->CLKCR, SDIO_CLKCR_WIDBUS_Msk | 0xFFU, SDIO_BUS_WIDE_1B | SDIO_INIT_CLK_DIV/2);
+
   /* Configure SD Bus width (4 bits mode selected) */
   if (sd_state == MSD_OK)
   {

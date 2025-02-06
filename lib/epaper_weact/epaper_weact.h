@@ -4,7 +4,23 @@
 #include <stdint.h>
 
 // Controller: SSD1683
-class EpaperWeAct_Driver_t
+class BinaryScreenBuffer_t
+{
+protected:
+    int m_width;
+    int m_height;
+
+public:
+    BinaryScreenBuffer_t(int width, int height);
+
+    virtual void mem_write(int x, int y, uint8_t data) = 0;
+    virtual uint8_t mem_read(int x, int y) = 0;
+    void set_pixel(int x, int y, bool color);
+    int get_width() { return m_width; }
+    int get_height() { return m_height; }
+};
+
+class EpaperWeAct_Driver_t : public BinaryScreenBuffer_t
 {
     static const int BITS_PER_BYTE = 8;
     static const int USER_ID_NUM_BYTES = 10;
@@ -53,8 +69,6 @@ class EpaperWeAct_Driver_t
     GpioPinInterface_t *m_busy;
     GpioPinInterface_t *m_rst;
 
-    int m_width;
-    int m_height;
 
     void select_cs();
     void deselect_cs();
@@ -99,7 +113,7 @@ public:
         BLACK = 1
     };
 
-    EpaperWeAct_Driver_t();
+    EpaperWeAct_Driver_t(int width, int height);
 
     void config_pins(GpioPinInterface_t *scl, GpioPinInterface_t *sda,
                      GpioPinInterface_t *dc, GpioPinInterface_t *cs, 
@@ -125,7 +139,9 @@ public:
     void print_mem(int size);
 
     void mem_write(uint8_t data);
-    void mem_write(int x, int y, uint8_t data);
+    virtual void mem_write(int x, int y, uint8_t data);
+    uint8_t mem_read();
+    virtual uint8_t mem_read(int x, int y);
 
     void sleep();
     void wake_up();
