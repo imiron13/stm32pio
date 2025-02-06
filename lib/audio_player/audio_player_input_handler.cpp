@@ -25,4 +25,9 @@ void AudioPlayerInputHandler_t::handle_inputs()
     {
         m_controller->nextSong();
     }
+
+    if (m_controller->getState() == WavPlayer_t::IDLE)
+    {
+        
+    }
 }
