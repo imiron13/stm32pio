@@ -3,6 +3,8 @@
 Button_t::Button_t(GpioPinInterface_t *gpio_pin, bool is_inverted_polarity)
     : m_gpio_pin(gpio_pin)
     , m_is_inverted_polarity(is_inverted_polarity)
+    , is_pressed_prev(false)
+    , is_pressed_cur(false)
 {
 
 }

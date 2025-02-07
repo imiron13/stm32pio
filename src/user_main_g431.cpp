@@ -18,6 +18,11 @@
 #include <shell.h>
 #include <vt100_terminal.h>
 
+#include <FreeRTOS.h>
+#include "task.h"
+#include "queue.h"
+#include "cmsis_os.h"
+
 #include <keypad_4x1.h>
 
 using namespace std;
@@ -88,13 +93,11 @@ void init_shell(FILE *device=stdout)
     shell.print_prompt();
 }
 
-extern "C" void init()
-{
-    /*GpioPinPortB_t<12> keypad_key2;
-    GpioPinPortB_t<14> keypad_key1;
-    GpioPinPortC_t<6> keypad_key4;
-    GpioPinPortA_t<9> keypad_key3;*/
+extern "C" void task_user_input(void *argument);
+osThreadId_t task_handle_user_input;
 
+extern "C" void task_user_input(void *argument)
+{
     GpioPinPortB_t<10> keypad_key2;
     GpioPinPortB_t<2> keypad_key1;
     GpioPinPortB_t<0> keypad_key4;
@@ -102,26 +105,6 @@ extern "C" void init()
 
     Keypad_4x1 keypad(&keypad_key1, &keypad_key2, &keypad_key3, &keypad_key4);
     keypad.init();
-
-    MX_USB_DEVICE_Init();
-
-    FILE *fuart1 = uart_fopen(&huart1);
-    stdout = fuart1;
-
-    FILE *fusb_vcom = usb_vcom_fopen();
-    stdout = fusb_vcom;
-
-    HAL_Delay(2000);  // delay for USB reconnect
-
-    printf(BG_BLACK FG_BRIGHT_WHITE VT100_CLEAR_SCREEN VT100_CURSOR_HOME VT100_SHOW_CURSOR);
-    printf(ENDL "Hello from %s (FreeRTOS)!" ENDL, MCU_NAME_STR);
-#ifdef DEBUG
-    printf("DEBUG=1, build time: " __TIME__ ENDL);
-#else
-    printf("DEBUG=0, build time: " __TIME__ ENDL);
-#endif
-    printf("SysClk = %ld KHz" ENDL, HAL_RCC_GetSysClockFreq() / 1000);
-    init_shell();  
 
     for(;;)
     {
@@ -199,5 +182,37 @@ extern "C" void init()
             printf("Keypad button4 released" ENDL);
             led1.off();
         }
-    }      
+
+        osDelay(200);
+    }       
+}
+
+extern "C" void init()
+{
+    MX_USB_DEVICE_Init();
+
+    FILE *fuart1 = uart_fopen(&huart1);
+    stdout = fuart1;
+
+    FILE *fusb_vcom = usb_vcom_fopen();
+    stdout = fusb_vcom;
+
+    HAL_Delay(2000);  // delay for USB reconnect
+
+    printf(BG_BLACK FG_BRIGHT_WHITE VT100_CLEAR_SCREEN VT100_CURSOR_HOME VT100_SHOW_CURSOR);
+    printf(ENDL "Hello from %s (FreeRTOS)!" ENDL, MCU_NAME_STR);
+#ifdef DEBUG
+    printf("DEBUG=1, build time: " __TIME__ ENDL);
+#else
+    printf("DEBUG=0, build time: " __TIME__ ENDL);
+#endif
+    printf("SysClk = %ld KHz" ENDL, HAL_RCC_GetSysClockFreq() / 1000);
+    init_shell();  
+
+    osThreadAttr_t defaultTask_attributes = { };
+    defaultTask_attributes.name = "task_user_input";
+    defaultTask_attributes.stack_size = 256 * 4;
+    defaultTask_attributes.priority = (osPriority_t) osPriorityNormal;
+
+    task_handle_user_input = osThreadNew(task_user_input, NULL, &defaultTask_attributes);
 }
