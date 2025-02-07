@@ -66,12 +66,12 @@ public:
         HAL_GPIO_Init(gpio[port_id], &GPIO_InitStruct);
     }
 
-    static void config_input()
+    static void config_input(bool pull_up = false)
     {
         GPIO_InitTypeDef GPIO_InitStruct = {0};
         GPIO_InitStruct.Pin = 1U << pin_id;
         GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-        GPIO_InitStruct.Pull = GPIO_NOPULL;
+        GPIO_InitStruct.Pull = pull_up ? GPIO_PULLUP : GPIO_PULLDOWN;
         HAL_GPIO_Init(gpio[port_id], &GPIO_InitStruct);
     }
 };

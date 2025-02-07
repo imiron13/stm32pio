@@ -26,7 +26,7 @@ public:
     }
 
     virtual void config_output() = 0;
-    virtual void config_input() = 0;
+    virtual void config_input(bool pull_up = false) = 0;
 
     virtual void write(bool is_high) = 0;
     virtual bool read() = 0;
@@ -53,9 +53,9 @@ public:
         GPIO_PIN_TEMPLATE::config_output();
     }
 
-    virtual void config_input()
+    virtual void config_input(bool pull_up = false)
     {
-        GPIO_PIN_TEMPLATE::config_input();
+        GPIO_PIN_TEMPLATE::config_input(pull_up);
     }
 };
 
@@ -68,7 +68,7 @@ GpioPin_t<GPIO_PIN_TEMPLATE>::GpioPin_t()
 class DummyGpioPinAlwaysLow_t : public GpioPinInterface_t
 {
 public:
-    DummyGpioPinAlwaysLow_t();
+    DummyGpioPinAlwaysLow_t() {}
 
     virtual void write(bool is_high)
     {
@@ -83,7 +83,7 @@ public:
     {
     }
 
-    virtual void config_input()
+    virtual void config_input(bool pull_up = false)
     {
     }
 };
@@ -91,7 +91,7 @@ public:
 class DummyGpioPinAlwaysHigh_t : public GpioPinInterface_t
 {
 public:
-    DummyGpioPinAlwaysHigh_t();
+    DummyGpioPinAlwaysHigh_t() {}
 
     virtual void write(bool is_high)
     {
@@ -106,7 +106,7 @@ public:
     {
     }
 
-    virtual void config_input()
+    virtual void config_input(bool pull_up = false)
     {
     }
 };
