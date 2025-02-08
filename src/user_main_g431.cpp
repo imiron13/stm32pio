@@ -40,11 +40,63 @@ using namespace std;
 
 #define EN_SD_CARD_READ_WRITE_SHELL_CMDS                    (1 && (EN_SD_CARD == 1))
 #define EN_FATFS_SHELL_CMDS                                 (1 && (EN_FATFS == 1))
-#define EN_AUDIO_SHELL_CMDS                                 (1 && (BOARD_SUPPORT_AUDIO == 1))
+#define EN_AUDIO_SHELL_CMDS                                 (1)
 #define EN_TETRIS                                           (1)
 
 extern UART_HandleTypeDef huart1;
+extern I2S_HandleTypeDef hi2s2;
+extern DMA_HandleTypeDef hdma_spi2_tx;
 Shell_t shell;
+
+#if (EN_AUDIO_SHELL_CMDS == 1)
+#include <math.h>
+
+#define PI 3.14159265358979323846
+#define TAU (2.0 * PI)
+
+bool shell_cmd_test_dac(FILE *f, ShellCmd_t *cmd, const char *s) {
+    HAL_StatusTypeDef res;
+    int nsamples = 512;
+    int16_t *dac_signal = (int16_t*)malloc(nsamples * sizeof(int16_t));
+    if (dac_signal == NULL)
+    {
+        fprintf(f, "Heap alloc error" ENDL);
+        return false;
+    }
+
+    int i = 0;
+    while(i < nsamples) {
+        double t = ((double)i/2.0)/((double)nsamples);
+        dac_signal[i] = 1023*sin(100.0 * TAU * t); // left
+        dac_signal[i+1] = dac_signal[i]; // right
+        i += 2;
+    }  
+
+    bool end = false;
+    while (!end) {
+        res = HAL_I2S_Transmit_DMA(&hi2s2, (uint16_t*)dac_signal, nsamples);
+        /*res = HAL_I2S_Transmit(&hi2s2, (uint16_t*)dac_signal, nsamples,
+                               HAL_MAX_DELAY);
+        if(res != HAL_OK) {
+            fprintf(f, "I2S - ERROR, res = %d!\r\n", res);
+            return false;
+        }*/
+
+        int c = fgetc(f);
+        if (c =='q')
+        {
+            //HAL_I2S_DMAStop();
+            end = 1;
+        }
+    }
+    free(dac_signal);
+    return (res == HAL_OK);
+} 
+
+#define DAC_BUF_NUM_SAMPLES     (4096)
+#define DAC_BUF_SIZE            (DAC_BUF_NUM_SAMPLES * sizeof(int16_t))
+
+#endif
 
 bool shell_cmd_clear_screen(FILE *f, ShellCmd_t *cmd, const char *s)
 {
@@ -86,9 +138,10 @@ void init_shell(FILE *device=stdout)
 {
     shell.add_command(ShellCmd_t("cls", "Clear screen", shell_cmd_clear_screen));
     shell.add_command(ShellCmd_t("led", "LED control", shell_cmd_led));
-
     shell.add_command(ShellCmd_t("heap", "", shell_heap_stat));
-
+#if (EN_AUDIO_SHELL_CMDS)    
+    shell.add_command(ShellCmd_t("dac_test", "Test DAC", shell_cmd_test_dac));
+#endif
     shell.set_device(device);
     shell.print_prompt();
 }
@@ -106,81 +159,86 @@ extern "C" void task_user_input(void *argument)
     Keypad_4x1 keypad(&keypad_key1, &keypad_key2, &keypad_key3, &keypad_key4);
     keypad.init();
 
+    uint32_t button_update_divider_cnt = 0;
     for(;;)
     {
         shell.run();
 
-        button1.update();
-        button2.update();
-        keypad.update();
+        if (button_update_divider_cnt % 4 == 0)
+        {
+            button_update_divider_cnt = 0;
+            button1.update();
+            button2.update();
+            keypad.update();
 
-        if (button1.is_pressed_event())
-        {
-            printf("Button1 pressed" ENDL);
-            led1.on();
-        }
-        else if (button1.is_released_event())
-        {
-            printf("Button1 released" ENDL);
-            led1.off();
-        }
+            if (button1.is_pressed_event())
+            {
+                printf("Button1 pressed" ENDL);
+                led1.on();
+            }
+            else if (button1.is_released_event())
+            {
+                printf("Button1 released" ENDL);
+                led1.off();
+            }
 
-        if (button2.is_pressed_event())
-        {
-            printf("Button2 pressed" ENDL);
-            led2.on();
-        }
-        else if (button2.is_released_event())
-        {
-            printf("Button2 released" ENDL);
-            led2.off();
-        }
+            if (button2.is_pressed_event())
+            {
+                printf("Button2 pressed" ENDL);
+                led2.on();
+            }
+            else if (button2.is_released_event())
+            {
+                printf("Button2 released" ENDL);
+                led2.off();
+            }
 
-        if (keypad.button1().is_pressed_event())
-        {
-            printf("Keypad button1 pressed" ENDL);
-            led1.on();
-        }
-        else if (keypad.button1().is_released_event())
-        {
-            printf("Keypad button1 released" ENDL);
-            led1.off();
-        }
+            if (keypad.button1().is_pressed_event())
+            {
+                printf("Keypad button1 pressed" ENDL);
+                led1.on();
+            }
+            else if (keypad.button1().is_released_event())
+            {
+                printf("Keypad button1 released" ENDL);
+                led1.off();
+            }
 
-        if (keypad.button2().is_pressed_event())
-        {
-            printf("Keypad button2 pressed" ENDL);
-            led1.on();
-        }
-        else if (keypad.button2().is_released_event())
-        {
-            printf("Keypad button2 released" ENDL);
-            led1.off();
-        }
+            if (keypad.button2().is_pressed_event())
+            {
+                printf("Keypad button2 pressed" ENDL);
+                led1.on();
+            }
+            else if (keypad.button2().is_released_event())
+            {
+                printf("Keypad button2 released" ENDL);
+                led1.off();
+            }
 
-        if (keypad.button3().is_pressed_event())
-        {
-            printf("Keypad button3 pressed" ENDL);
-            led1.on();
-        }
-        else if (keypad.button3().is_released_event())
-        {
-            printf("Keypad button3 released" ENDL);
-            led1.off();
-        }
+            if (keypad.button3().is_pressed_event())
+            {
+                printf("Keypad button3 pressed" ENDL);
+                led1.on();
+            }
+            else if (keypad.button3().is_released_event())
+            {
+                printf("Keypad button3 released" ENDL);
+                led1.off();
+            }
 
-        if (keypad.button4().is_pressed_event())
-        {
-            printf("Keypad button4 pressed" ENDL);
-            led1.on();
+            if (keypad.button4().is_pressed_event())
+            {
+                printf("Keypad button4 pressed" ENDL);
+                led1.on();
+            }
+            else if (keypad.button4().is_released_event())
+            {
+                printf("Keypad button4 released" ENDL);
+                led1.off();
+            }
         }
-        else if (keypad.button4().is_released_event())
-        {
-            printf("Keypad button4 released" ENDL);
-            led1.off();
-        }
-
-        osDelay(200);
+        osDelay(50);
+        button_update_divider_cnt++;
     }       
 }
 
