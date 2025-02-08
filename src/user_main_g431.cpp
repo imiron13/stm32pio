@@ -112,10 +112,7 @@ extern "C" void task_user_input(void *argument)
 
         button1.update();
         button2.update();
-        keypad.button1().update();
-        keypad.button2().update();
-        keypad.button3().update();
-        keypad.button4().update();
+        keypad.update();
 
         if (button1.is_pressed_event())
         {

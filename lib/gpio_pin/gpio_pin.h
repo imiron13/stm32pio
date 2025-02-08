@@ -7,6 +7,13 @@
 
 #pragma once
 
+enum GpioPull_t
+{
+    PULL_NONE,
+    PULL_UP,
+    PULL_DOWN
+};
+
 class GpioPinInterface_t
 {
 public:
@@ -26,7 +33,7 @@ public:
     }
 
     virtual void config_output() = 0;
-    virtual void config_input(bool pull_up = false) = 0;
+    virtual void config_input(GpioPull_t pull=PULL_NONE) = 0;
 
     virtual void write(bool is_high) = 0;
     virtual bool read() = 0;
@@ -53,9 +60,9 @@ public:
         GPIO_PIN_TEMPLATE::config_output();
     }
 
-    virtual void config_input(bool pull_up = false)
+    virtual void config_input(GpioPull_t pull=PULL_NONE)
     {
-        GPIO_PIN_TEMPLATE::config_input(pull_up);
+        GPIO_PIN_TEMPLATE::config_input(pull);
     }
 };
 
@@ -83,7 +90,7 @@ public:
     {
     }
 
-    virtual void config_input(bool pull_up = false)
+    virtual void config_input(GpioPull_t pull=PULL_NONE)
     {
     }
 };
@@ -106,7 +113,7 @@ public:
     {
     }
 
-    virtual void config_input(bool pull_up = false)
+    virtual void config_input(GpioPull_t pull=PULL_NONE)
     {
     }
 };

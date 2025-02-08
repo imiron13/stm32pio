@@ -17,9 +17,13 @@ class Keypad_4x1
     Button_t m_button4;
 
 public:
-    Keypad_4x1(GpioPinInterface_t *key1, GpioPinInterface_t *key2, GpioPinInterface_t *key3, GpioPinInterface_t *key4, GpioPinInterface_t *common=nullptr);
+    Keypad_4x1(
+        GpioPinInterface_t *key1, GpioPinInterface_t *key2, GpioPinInterface_t *key3, 
+        GpioPinInterface_t *key4, GpioPinInterface_t *common=nullptr
+    );
 
     void init();
+    void update();
 
     Button_t &button1() { return m_button1; }
     Button_t &button2() { return m_button2; }
