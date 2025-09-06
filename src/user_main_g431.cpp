@@ -233,8 +233,195 @@ bool shell_emul_eeprom_write(FILE *f, ShellCmd_t *cmd, const char *s)
     return true;
 }
 
+const char* ascii_art_digits[11][7] = {
+    {
+        " ▗▄▖ ",
+        " █▀█ ",
+        "▐▌ ▐▌",
+        "▐▌█▐▌",
+        "▐▌ ▐▌",
+        " █▄█ ",
+        " ▝▀▘ ",
+    },
+    {
+        " ▗▄  ",
+        " ▛█  ",
+        "  █  ",
+        "  █  ",
+        "  █  ",
+        "▗▄█▄▖",
+        "▝▀▀▀▘",
+    },
+    {
+        " ▄▄▖ ",
+        "▐▀▀█▖",
+        "   ▐▌",
+        "  ▗▛ ",
+        " ▗▛  ",
+        "▗█▄▄▖",
+        "▝▀▀▀▘",
+    },
+    {
+        " ▄▄▖ ",
+        "▐▀▀█▖",
+        "   ▟▌",
+        " ▐██ ",
+        "   ▜▌",
+        "▐▄▄█▘",
+        " ▀▀▘ ",
+    },
+    {
+        "  ▗▄ ",
+        "  ▟█ ",
+        " ▐▘█ ",
+        "▗▛ █ ",
+        "▐███▌",
+        "   █ ",
+        "   ▀ ",
+    },
+    {
+        "▗▄▄▄ ",
+        "▐▛▀▀ ",
+        "▐▙▄▖ ",
+        "▐▀▀█▖",
+        "   ▐▌",
+        "▐▄▄█▘",
+        " ▀▀▘ ",
+    },
+    {
+        " ▗▄▖ ",
+        " █▀▜ ",
+        "▐▌▄▖ ",
+        "▐█▀█▖",
+        "▐▌ ▐▌",
+        "▝█▄█▘",
+        " ▝▀▘ ",
+    },
+    {
+        "▗▄▄▄▖",
+        "▝▀▀█▌",
+        "  ▗█ ",
+        "  ▐▌ ",
+        "  █  ",
+        " ▐▌  ",
+        " ▀   ",
+    },
+    {
+        " ▗▄▖ ",
+        "▗█▀█▖",
+        "▐▙ ▟▌",
+        " ███ ",
+        "▐▛ ▜▌",
+        "▝█▄█▘",
+        " ▝▀▘ ",
+    },
+    {
+        " ▗▄▖ ",
+        "▗█▀█▖",
+        "▐▌ ▐▌",
+        "▝█▄█▌",
+        " ▝▀▐▌",
+        " ▙▄█ ",
+        " ▝▀▘ ",
+    },
+    {
+        "     ",
+        "     ",
+        "     ",
+        "     ",
+        "     ",
+        "     ",
+        "     ",
+    }
+};
+
+void print_ascii_art(FILE *f, const char* text)
+{
+    for (int row = 0; row < 7; row++)
+    {
+        const char *s = text;
+        while (*s)
+        {
+            char ch = *s;
+            int d;
+            if ((ch >= '0') && (ch <= '9'))
+            {
+                d = ch - '0';
+            }
+            else
+            {
+                d = 10;
+            }
+            fprintf(f, "%s ", ascii_art_digits[d][row]);
+            s++;
+        }
+        fprintf(f, ENDL);
+    }
+}
+
+void print_ascii_art_number(FILE *f, int num)
+{
+    if (num < 0)
+    {
+        num = 0;
+    }
+    else if (num > 99999999)
+    {
+        num = 99999999;
+    }
+
+    const int EMPTY_DIGIT = 10;
+    const int NUM_DIGITS = 8;
+    int digits[NUM_DIGITS];
+    for (int i = 0; i < NUM_DIGITS; i++)
+    {
+        digits[i] = EMPTY_DIGIT;
+    }
+
+    int idx = 7;
+    while (num > 0)
+    {
+        digits[idx] = num % 10;
+        num /= 10;
+        idx--;
+    }
+
+    for (int row = 0; row < 7; row++)
+    {
+        for (int d = 0; d < 8; d++)
+        {
+            fprintf(f, "%s ", ascii_art_digits[digits[d]][row]);
+        }
+        fprintf(f, ENDL);
+    }
+}
+
+void uint_to_grouped_str(unsigned int value, char *out)
+{
+    char buf[16];
+    snprintf(buf, sizeof(buf), "%u", value);
+
+    int len = strlen(buf);
+    int out_idx = 9; // last char index for 10-char output
+    out[10] = '\0';
+
+    int digit_count = 0;
+    for (int i = len - 1; i >= 0; --i) {
+        if (digit_count > 0 && digit_count % 3 == 0) {
+            out[out_idx--] = ' ';
+        }
+        out[out_idx--] = buf[i];
+        digit_count++;
+    }
+    // Fill remaining with spaces for right alignment
+    while (out_idx >= 0) {
+        out[out_idx--] = ' ';
+    }
+}
+
 bool shell_pulse_counter_stat(FILE *f, ShellCmd_t *cmd, const char *s)
 {
+    fprintf(f, BG_BLUE FG_BRIGHT_WHITE VT100_CLEAR_SCREEN VT100_CURSOR_HOME VT100_HIDE_CURSOR);
     __HAL_TIM_SET_COUNTER(&htim2, 0);
     while (true)
     {
@@ -244,16 +431,21 @@ bool shell_pulse_counter_stat(FILE *f, ShellCmd_t *cmd, const char *s)
             break;
         }
         uint32_t cnt = __HAL_TIM_GET_COUNTER(&htim2);
-        fprintf(f, "Pulse counter: %lu" ENDL, (unsigned long)cnt);
-        osDelay(500);
+        //fprintf(f, "Pulse counter: %lu" ENDL, (unsigned long)cnt);
+        char buf[11];
+        uint_to_grouped_str(cnt, buf);
+        fprintf(f, VT100_CURSOR_HOME);
+        print_ascii_art(f, buf);
+        osDelay(200);
     }
+    fprintf(f, BG_BLACK FG_BRIGHT_WHITE VT100_CLEAR_SCREEN VT100_CURSOR_HOME VT100_SHOW_CURSOR);
     return true;
 }
 
 bool shell_freq_measure(FILE *f, ShellCmd_t *cmd, const char *s)
 {
     uint32_t duration_ms = cmd->get_int_arg(s, 1);
-
+    fprintf(f, BG_BLUE FG_BRIGHT_WHITE VT100_CLEAR_SCREEN VT100_CURSOR_HOME VT100_HIDE_CURSOR);
     if (duration_ms == 0)
     {
         duration_ms = 1000;
@@ -264,7 +456,7 @@ bool shell_freq_measure(FILE *f, ShellCmd_t *cmd, const char *s)
         int c = fgetc(f);
         if (c =='q')
         {
-            return true;
+            break;
         }
         
         __disable_irq();
@@ -281,8 +473,20 @@ bool shell_freq_measure(FILE *f, ShellCmd_t *cmd, const char *s)
         uint32_t cnt = __HAL_TIM_GET_COUNTER(&htim2);
         __enable_irq();
         int freq = ((float)cnt) / ((float)duration_ms) * 1000.0f;
-        fprintf(f, "Frequency: %d Hz, cnt=%lu" ENDL, freq, cnt);
+        char buf[11];
+        uint_to_grouped_str(freq, buf);
+        fprintf(f, VT100_CURSOR_HOME);
+        print_ascii_art(f, buf);
+        //fprintf(f, "Frequency: %d Hz, cnt=%lu" ENDL, freq, cnt);
     }
+    fprintf(f, BG_BLACK FG_BRIGHT_WHITE VT100_CLEAR_SCREEN VT100_CURSOR_HOME VT100_SHOW_CURSOR);
+    return true;
+}
+
+bool shell_asc(FILE *f, ShellCmd_t *cmd, const char *s)
+{
+    const char* arg = cmd->get_str_arg(s, 1);
+    print_ascii_art(f, arg);
     return true;
 }
 
@@ -296,6 +500,7 @@ void init_shell(FILE *device=stdout)
     shell.add_command(ShellCmd_t("eewr", "", shell_emul_eeprom_write));
     shell.add_command(ShellCmd_t("pcnt", "", shell_pulse_counter_stat));
     shell.add_command(ShellCmd_t("freq", "", shell_freq_measure));
+    shell.add_command(ShellCmd_t("asc", "", shell_asc));
 #if (EN_AUDIO_SHELL_CMDS)    
     shell.add_command(ShellCmd_t("dac_test", "Test DAC", shell_cmd_test_dac));
 #endif
