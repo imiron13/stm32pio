@@ -24,6 +24,9 @@
 #include "cmsis_os.h"
 
 #include <keypad_4x1.h>
+extern "C" {
+#include <eeprom_emul.h>
+}
 
 using namespace std;
 
@@ -134,11 +137,83 @@ bool shell_heap_stat(FILE *f, ShellCmd_t *cmd, const char *s)
     return true;
 }
 
+bool shell_emul_eeprom_format(FILE *f, ShellCmd_t *cmd, const char *s)
+{
+    HAL_FLASH_Unlock();
+    EE_Status stat = EE_Format(EE_FORCED_ERASE);
+    HAL_FLASH_Lock();
+    if (stat == EE_OK)
+    {
+        fprintf(f, "EMUL_EEPROM format OK" ENDL);
+    }
+    else
+    {
+        fprintf(f, "EMUL_EEPROM format error %d" ENDL, stat);
+        return false;
+    }
+    return true;
+}
+
+bool shell_emul_eeprom_read(FILE *f, ShellCmd_t *cmd, const char *s)
+{
+    uint32_t var_id = cmd->get_int_arg(s, 1);
+    uint32_t value;
+    EE_Status stat = EE_ReadVariable32bits(var_id, &value);
+    if (stat == EE_OK)
+    {
+        fprintf(f, "EMUL_EEPROM[0x%lX]=0x%08lX" ENDL, var_id, value);
+    }
+    else
+    {
+        fprintf(f, "EMUL_EEPROM[0x%lX] - read error %d" ENDL, var_id, stat);
+        return false;
+    }
+    return true;
+}
+
+bool shell_emul_eeprom_write(FILE *f, ShellCmd_t *cmd, const char *s)
+{
+    uint32_t var_id = cmd->get_int_arg(s, 1);
+    uint32_t value = cmd->get_int_arg(s, 2);
+    HAL_FLASH_Unlock();
+    EE_Status stat = EE_WriteVariable32bits(var_id, value);
+    if (stat == EE_CLEANUP_REQUIRED)
+    {
+        fprintf(f, "EMUL_EEPROM cleanup...");
+        stat = EE_CleanUp();
+        if (stat == EE_OK)
+        {
+            fprintf(f, "OK" ENDL);
+        }
+        else
+        {
+            fprintf(f, "error %d" ENDL, stat);
+            HAL_FLASH_Lock();
+            return false;
+        }
+    }
+
+    HAL_FLASH_Lock();
+    if (stat == EE_OK)
+    {
+        fprintf(f, "EMUL_EEPROM[0x%lX]=0x%08lX - OK" ENDL, var_id, value);
+    }
+    else
+    {
+        fprintf(f, "EMUL_EEPROM[0x%lX] - write error %d" ENDL, var_id, stat);
+        return false;
+    }
+    return true;
+}
+
 void init_shell(FILE *device=stdout)
 {
     shell.add_command(ShellCmd_t("cls", "Clear screen", shell_cmd_clear_screen));
     shell.add_command(ShellCmd_t("led", "LED control", shell_cmd_led));
     shell.add_command(ShellCmd_t("heap", "", shell_heap_stat));
+    shell.add_command(ShellCmd_t("eeformat", "", shell_emul_eeprom_format));
+    shell.add_command(ShellCmd_t("eerd", "", shell_emul_eeprom_read));
+    shell.add_command(ShellCmd_t("eewr", "", shell_emul_eeprom_write));
 #if (EN_AUDIO_SHELL_CMDS)    
     shell.add_command(ShellCmd_t("dac_test", "Test DAC", shell_cmd_test_dac));
 #endif
@@ -242,6 +317,22 @@ extern "C" void task_user_input(void *argument)
     }       
 }
 
+void EmulEEPROM_Init()
+{
+    HAL_FLASH_Unlock();
+    EE_Status stat = EE_Init(EE_CONDITIONAL_ERASE);
+    HAL_FLASH_Lock();
+    if (stat == EE_OK)
+    {
+        printf("EMUL_EEPROM init - OK" ENDL);
+    }
+    else
+    {
+        printf("EMUL_EEPROM init - error %d" ENDL, stat);
+        return;
+    }
+}
+
 extern "C" void init()
 {
     MX_USB_DEVICE_Init();
@@ -262,6 +353,9 @@ extern "C" void init()
     printf("DEBUG=0, build time: " __TIME__ ENDL);
 #endif
     printf("SysClk = %ld KHz" ENDL, HAL_RCC_GetSysClockFreq() / 1000);
+
+    EmulEEPROM_Init();
+
     init_shell();  
 
     osThreadAttr_t defaultTask_attributes = { };
