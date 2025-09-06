@@ -49,6 +49,7 @@ using namespace std;
 extern UART_HandleTypeDef huart1;
 extern I2S_HandleTypeDef hi2s2;
 extern DMA_HandleTypeDef hdma_spi2_tx;
+extern TIM_HandleTypeDef htim2;
 Shell_t shell;
 
 #if (EN_AUDIO_SHELL_CMDS == 1)
@@ -157,16 +158,40 @@ bool shell_emul_eeprom_format(FILE *f, ShellCmd_t *cmd, const char *s)
 bool shell_emul_eeprom_read(FILE *f, ShellCmd_t *cmd, const char *s)
 {
     uint32_t var_id = cmd->get_int_arg(s, 1);
-    uint32_t value;
-    EE_Status stat = EE_ReadVariable32bits(var_id, &value);
-    if (stat == EE_OK)
+    if (var_id == 0)
     {
-        fprintf(f, "EMUL_EEPROM[0x%lX]=0x%08lX" ENDL, var_id, value);
+        const uint32_t num_vars = 32;
+        for (uint32_t id = 1; id < num_vars; id++)
+        {
+            uint32_t value;
+            EE_Status stat = EE_ReadVariable32bits(id, &value);
+            if (stat == EE_OK)
+            {
+                fprintf(f, "EMUL_EEPROM[0x%lX]=0x%08lX" ENDL, (unsigned long)id, (unsigned long)value);
+            }
+            else if (stat == EE_NO_DATA)
+            {
+            }
+            else
+            {
+                fprintf(f, "EMUL_EEPROM[0x%lX] - read error %d" ENDL, (unsigned long)id, stat);
+                return false;
+            }
+        }
     }
     else
     {
-        fprintf(f, "EMUL_EEPROM[0x%lX] - read error %d" ENDL, var_id, stat);
-        return false;
+        uint32_t value;
+        EE_Status stat = EE_ReadVariable32bits(var_id, &value);
+        if (stat == EE_OK)
+        {
+            fprintf(f, "EMUL_EEPROM[0x%lX]=0x%08lX" ENDL, var_id, value);
+        }
+        else
+        {
+            fprintf(f, "EMUL_EEPROM[0x%lX] - read error %d" ENDL, var_id, stat);
+            return false;
+        }
     }
     return true;
 }
@@ -206,6 +231,22 @@ bool shell_emul_eeprom_write(FILE *f, ShellCmd_t *cmd, const char *s)
     return true;
 }
 
+bool shell_pulse_counter_stat(FILE *f, ShellCmd_t *cmd, const char *s)
+{
+    while (true)
+    {
+        int c = fgetc(f);
+        if (c =='q')
+        {
+            break;
+        }
+        uint32_t cnt = __HAL_TIM_GET_COUNTER(&htim2);
+        fprintf(f, "Pulse counter: %lu" ENDL, (unsigned long)cnt);
+        osDelay(500);
+    }
+    return true;
+}
+
 void init_shell(FILE *device=stdout)
 {
     shell.add_command(ShellCmd_t("cls", "Clear screen", shell_cmd_clear_screen));
@@ -214,6 +255,7 @@ void init_shell(FILE *device=stdout)
     shell.add_command(ShellCmd_t("eeformat", "", shell_emul_eeprom_format));
     shell.add_command(ShellCmd_t("eerd", "", shell_emul_eeprom_read));
     shell.add_command(ShellCmd_t("eewr", "", shell_emul_eeprom_write));
+    shell.add_command(ShellCmd_t("pcnt", "", shell_pulse_counter_stat));
 #if (EN_AUDIO_SHELL_CMDS)    
     shell.add_command(ShellCmd_t("dac_test", "Test DAC", shell_cmd_test_dac));
 #endif
@@ -317,7 +359,7 @@ extern "C" void task_user_input(void *argument)
     }       
 }
 
-void EmulEEPROM_Init()
+void emul_eeprom_init()
 {
     HAL_FLASH_Unlock();
     EE_Status stat = EE_Init(EE_CONDITIONAL_ERASE);
@@ -331,6 +373,32 @@ void EmulEEPROM_Init()
         printf("EMUL_EEPROM init - error %d" ENDL, stat);
         return;
     }
+}
+
+void pulse_counter_init(void)
+{
+    __HAL_RCC_TIM2_CLK_ENABLE();
+
+    // Disable timer before config
+    __HAL_TIM_DISABLE(&htim2);
+
+    // Configure CH1 as input (TI1)
+    TIM2->CCMR1 &= ~TIM_CCMR1_CC1S;
+    TIM2->CCMR1 |= TIM_CCMR1_CC1S_0;
+
+    // Select rising edge
+    TIM2->CCER &= ~TIM_CCER_CC1P;
+
+    // Trigger = TI1FP1 (101)
+    TIM2->SMCR &= ~TIM_SMCR_TS;
+    TIM2->SMCR |= TIM_SMCR_TS_2 | TIM_SMCR_TS_0;
+
+    // Slave mode = external clock mode 1 (SMS = 111)
+    TIM2->SMCR &= ~TIM_SMCR_SMS;
+    TIM2->SMCR |= TIM_SMCR_SMS_2 | TIM_SMCR_SMS_1 | TIM_SMCR_SMS_0;
+
+    // Enable counter
+    __HAL_TIM_ENABLE(&htim2);
 }
 
 extern "C" void init()
@@ -354,9 +422,10 @@ extern "C" void init()
 #endif
     printf("SysClk = %ld KHz" ENDL, HAL_RCC_GetSysClockFreq() / 1000);
 
-    EmulEEPROM_Init();
+    emul_eeprom_init();
 
     init_shell();  
+    pulse_counter_init();
 
     osThreadAttr_t defaultTask_attributes = { };
     defaultTask_attributes.name = "task_user_input";
