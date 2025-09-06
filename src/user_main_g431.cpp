@@ -50,6 +50,8 @@ extern UART_HandleTypeDef huart1;
 extern I2S_HandleTypeDef hi2s2;
 extern DMA_HandleTypeDef hdma_spi2_tx;
 extern TIM_HandleTypeDef htim2;
+extern TIM_HandleTypeDef htim3;
+
 Shell_t shell;
 
 #if (EN_AUDIO_SHELL_CMDS == 1)
@@ -233,6 +235,7 @@ bool shell_emul_eeprom_write(FILE *f, ShellCmd_t *cmd, const char *s)
 
 bool shell_pulse_counter_stat(FILE *f, ShellCmd_t *cmd, const char *s)
 {
+    __HAL_TIM_SET_COUNTER(&htim2, 0);
     while (true)
     {
         int c = fgetc(f);
@@ -247,6 +250,42 @@ bool shell_pulse_counter_stat(FILE *f, ShellCmd_t *cmd, const char *s)
     return true;
 }
 
+bool shell_freq_measure(FILE *f, ShellCmd_t *cmd, const char *s)
+{
+    uint32_t duration_ms = cmd->get_int_arg(s, 1);
+
+    if (duration_ms == 0)
+    {
+        duration_ms = 1000;
+    }
+    __HAL_TIM_ENABLE(&htim3);
+    while (true)
+    {
+        int c = fgetc(f);
+        if (c =='q')
+        {
+            return true;
+        }
+        
+        __disable_irq();
+        __HAL_TIM_SET_COUNTER(&htim2, 0);
+        for (uint32_t i = 0; i < 1000; i++)
+        {
+            __HAL_TIM_SET_COUNTER(&htim3, 0);
+            while ((__HAL_TIM_GET_COUNTER(&htim3)) < duration_ms); 
+        }
+
+        //osDelay(duration_ms);
+        //HAL_Delay(duration_ms);
+
+        uint32_t cnt = __HAL_TIM_GET_COUNTER(&htim2);
+        __enable_irq();
+        int freq = ((float)cnt) / ((float)duration_ms) * 1000.0f;
+        fprintf(f, "Frequency: %d Hz, cnt=%lu" ENDL, freq, cnt);
+    }
+    return true;
+}
+
 void init_shell(FILE *device=stdout)
 {
     shell.add_command(ShellCmd_t("cls", "Clear screen", shell_cmd_clear_screen));
@@ -256,6 +295,7 @@ void init_shell(FILE *device=stdout)
     shell.add_command(ShellCmd_t("eerd", "", shell_emul_eeprom_read));
     shell.add_command(ShellCmd_t("eewr", "", shell_emul_eeprom_write));
     shell.add_command(ShellCmd_t("pcnt", "", shell_pulse_counter_stat));
+    shell.add_command(ShellCmd_t("freq", "", shell_freq_measure));
 #if (EN_AUDIO_SHELL_CMDS)    
     shell.add_command(ShellCmd_t("dac_test", "Test DAC", shell_cmd_test_dac));
 #endif
