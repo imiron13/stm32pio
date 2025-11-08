@@ -17,6 +17,8 @@
 #include <button.h>
 #include <shell.h>
 #include <vt100_terminal.h>
+#include <apu2A03.h>
+#include <vgm.h>
 
 #include <FreeRTOS.h>
 #include "task.h"
@@ -60,6 +62,47 @@ Shell_t shell;
 #define PI 3.14159265358979323846
 #define TAU (2.0 * PI)
 
+//extern const uint8_t _binary_Unchained_vgm_start;
+//extern const unsigned int _binary_Unchained_vgm_size;
+
+extern const uint8_t _binary_sample_vgm_start;
+extern const unsigned int _binary_sample_vgm_size;
+
+class I2S_AudioOutput : public AudioOutput
+{
+public:
+    virtual void playBuffer(int16_t* buffer, uint32_t size) override
+    {
+        hi2s2.hdmatx->Init.Mode = DMA_CIRCULAR;
+        HAL_DMA_Init(hi2s2.hdmatx);
+        HAL_I2S_Transmit_DMA(&hi2s2, (uint16_t*)buffer, size);
+    };
+
+    virtual void stop() override
+    {
+        HAL_I2S_DMAStop(&hi2s2);
+    };
+
+    virtual void playBufferOnce(int16_t* buffer, uint32_t size) override
+    {
+        hi2s2.hdmatx->Init.Mode = DMA_NORMAL;
+        HAL_DMA_Init(hi2s2.hdmatx);
+        HAL_I2S_Transmit_DMA(&hi2s2, (uint16_t*)buffer, size);
+    };
+
+    virtual uint32_t getBufferReadPos() override
+    {
+        return AUDIO_BUFFER_SIZE - __HAL_DMA_GET_COUNTER(hi2s2.hdmatx);
+    };
+};
+
+VgmPlayer vgm_player;
+Apu2A03 apu;
+Bus bus;
+Cpu6502 cpu;
+I2S_AudioOutput audio_output;
+
+#if 0
 bool shell_cmd_test_dac(FILE *f, ShellCmd_t *cmd, const char *s) {
     HAL_StatusTypeDef res;
     int nsamples = 512;
@@ -101,6 +144,7 @@ bool shell_cmd_test_dac(FILE *f, ShellCmd_t *cmd, const char *s) {
 
 #define DAC_BUF_NUM_SAMPLES     (4096)
 #define DAC_BUF_SIZE            (DAC_BUF_NUM_SAMPLES * sizeof(int16_t))
+#endif
 
 #endif
 
@@ -233,6 +277,7 @@ bool shell_emul_eeprom_write(FILE *f, ShellCmd_t *cmd, const char *s)
     return true;
 }
 
+#if 0
 const char* ascii_art_digits[11][7] = {
     {
         " ▗▄▖ ",
@@ -489,6 +534,22 @@ bool shell_asc(FILE *f, ShellCmd_t *cmd, const char *s)
     print_ascii_art(f, arg);
     return true;
 }
+#endif
+
+bool shell_cmd_play_nes_chiptune(FILE *f, ShellCmd_t *cmd, const char *s)
+{
+    fprintf(f, "Playing nes chiptune..." ENDL);
+    audio_output.playBuffer(apu.audio_buffer, AUDIO_BUFFER_SIZE);
+
+    VgmPlayer::Status status = vgm_player.play(&_binary_sample_vgm_start,
+                                              (size_t)&_binary_sample_vgm_size,
+                                              apu,
+                                              stdout);
+    audio_output.stop();                                  
+    (void)status;
+
+    return true;
+}
 
 void init_shell(FILE *device=stdout)
 {
@@ -498,11 +559,12 @@ void init_shell(FILE *device=stdout)
     shell.add_command(ShellCmd_t("eeformat", "", shell_emul_eeprom_format));
     shell.add_command(ShellCmd_t("eerd", "", shell_emul_eeprom_read));
     shell.add_command(ShellCmd_t("eewr", "", shell_emul_eeprom_write));
-    shell.add_command(ShellCmd_t("pcnt", "", shell_pulse_counter_stat));
-    shell.add_command(ShellCmd_t("freq", "", shell_freq_measure));
-    shell.add_command(ShellCmd_t("asc", "", shell_asc));
+    //shell.add_command(ShellCmd_t("pcnt", "", shell_pulse_counter_stat));
+    //shell.add_command(ShellCmd_t("freq", "", shell_freq_measure));
+    //shell.add_command(ShellCmd_t("asc", "", shell_asc));
 #if (EN_AUDIO_SHELL_CMDS)    
-    shell.add_command(ShellCmd_t("dac_test", "Test DAC", shell_cmd_test_dac));
+    //shell.add_command(ShellCmd_t("dac_test", "Test DAC", shell_cmd_test_dac));
+    shell.add_command(ShellCmd_t("plnes", "Play nes chiptune", shell_cmd_play_nes_chiptune));
 #endif
     shell.set_device(device);
     shell.print_prompt();
@@ -646,8 +708,29 @@ void pulse_counter_init(void)
     __HAL_TIM_ENABLE(&htim2);
 }
 
+void apuInit()
+{
+    apu.connectBus(&bus);
+    apu.connectCPU(&cpu);
+
+    array<uint8_t, 20> initialRegisters = {
+        0x30, 0x08, 0x00, 0x00, // Pulse 1
+        0x30, 0x08, 0x00, 0x00, // Pulse 2
+        0x80, 0x00, 0x00, 0x00, // Triangle
+        0x30, 0x00, 0x00, 0x00, // Noise
+        0x00, 0x00, 0x00, 0x00, // DMC
+    };
+    for (size_t i = 0; i < initialRegisters.size(); i++) {
+        apu.cpuWrite(0x4000 + i, initialRegisters[i]);
+    }
+    // Enable all channels
+    apu.cpuWrite(0x4015, 0x0F);
+    apu.cpuWrite(0x4017, 0x40);
+}   
+
 extern "C" void init()
 {
+#if 0
     MX_USB_DEVICE_Init();
 
     FILE *fuart1 = uart_fopen(&huart1);
@@ -666,8 +749,19 @@ extern "C" void init()
     printf("DEBUG=0, build time: " __TIME__ ENDL);
 #endif
     printf("SysClk = %ld KHz" ENDL, HAL_RCC_GetSysClockFreq() / 1000);
+#endif
+    apu.connectAudioOutput(&audio_output);
+    apuInit();
 
-    emul_eeprom_init();
+    audio_output.playBuffer(apu.audio_buffer, AUDIO_BUFFER_SIZE);
+
+    VgmPlayer::Status status = vgm_player.play(&_binary_sample_vgm_start,
+                                              (size_t)&_binary_sample_vgm_size,
+                                              apu,
+                                              stdout);
+    audio_output.stop();                                  
+
+    //emul_eeprom_init();
 
     init_shell();  
     pulse_counter_init();
