@@ -16,3 +16,11 @@
 
 #define likely(x)      __builtin_expect(!!(x), 1)
 #define unlikely(x)    __builtin_expect(!!(x), 0)
+#define force_inline   __attribute__((always_inline)) inline
+#define no_inline      __attribute__((noinline))
+#define no_return      __attribute__((noreturn))
+#define unused         __attribute__((unused))
+#define optimize_size __attribute__((optimize("Os")))
+#define optimize_speed __attribute__((optimize("-O3")))
+#define attr_section(x)    __attribute__((section(x)))
+#define fast_code_section  __attribute__((section(".ramfunc")))

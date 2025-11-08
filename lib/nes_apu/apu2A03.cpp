@@ -6,16 +6,16 @@
  */
 
 #include "apu2A03.h"
+#include "intrinsics.h"
 #include <cstdint>
 #include <cstring>
+#include <cstdio>
 
 using namespace std;
 
 #define DMA_ATTR
 #define IRAM_ATTR
 #define SAMPLE_RATE 44100
-//#define SAMPLE_RATE 11025
-//#define SAMPLE_RATE 22050
 
 DMA_ATTR int16_t Apu2A03::audio_buffer[AUDIO_BUFFER_SIZE];
 
@@ -370,10 +370,6 @@ IRAM_ATTR inline bool Apu2A03::clock()
 	return false;
 }
 
-#include "hal_wrapper_stm32.h"
-#include <cstdio>
-#include "intrinsics.h"
-
 IRAM_ATTR void Apu2A03::generateSample()
 {
     uint32_t val = 0;
@@ -389,33 +385,14 @@ IRAM_ATTR void Apu2A03::generateSample()
 
 	int16_t s16 = ((int16_t)val - 128) << 8;  // 8-bit unsigned -> signed 16-bit
 
-	//for (int i = 0; i < 2; i++)
-	{
-		audio_buffer[buffer_index + 0] = s16;  // Left
-		audio_buffer[buffer_index + 1] = s16;  // Right
-		buffer_index += 2;
-	}
-	// Reset audio buffer index once filled
+	audio_buffer[buffer_index + 0] = s16;  // Left
+	audio_buffer[buffer_index + 1] = s16;  // Right
+	buffer_index += 2;
 
+	// Reset audio buffer index once filled
 	if (buffer_index >= AUDIO_BUFFER_SIZE) 
     { 
 		buffer_index = 0;
-		/*static uint32_t time_before = 0;
-		uint32_t time_after = HAL_GetTick();
-		uint32_t elapsed = time_after - time_before;
-		printf("Apu buffer played, elapsed time: %lu ms" ENDL, (unsigned long)elapsed);
-        buffer_index = 0;
-		audio->playBufferOnce(audio_buffer, AUDIO_BUFFER_SIZE);
-
-		time_before = HAL_GetTick();*/
-		//static size_t dummy;
-        //i2s_write(I2S_NUM_0, audio_buffer, sizeof(audio_buffer), &dummy, portMAX_DELAY);
-		/*for (int i = 0; i < AUDIO_BUFFER_SIZE; i++) {
-			samples[i] = audio_buffer[i];
-		}*/
-
-		//putAudioStreamData(audio_buffer, sizeof(audio_buffer));
-
     }
 }
 

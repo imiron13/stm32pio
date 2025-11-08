@@ -7,6 +7,7 @@
 #ifndef APU2A03_H
 #define APU2A03_H
 
+#include "intrinsics.h"
 #include <cstdint>
 
 using namespace std;
@@ -27,13 +28,10 @@ public:
 	int cycles = 0;
 };
 
-class AudioOutput
+class IDmaRingBufferReadPos
 {
 public:
-	virtual void playBuffer(int16_t* buffer, uint32_t size) = 0;
-	virtual void stop() = 0;
-	virtual void playBufferOnce(int16_t* buffer, uint32_t size) = 0;
-	virtual uint32_t getBufferReadPos() = 0;
+	virtual uint32_t getReadPos() const = 0;
 };
 
 class Apu2A03
@@ -45,13 +43,13 @@ public:
 public:
     void connectBus(Bus* n) { bus = n; }
     void connectCPU(Cpu6502* n) { cpu = n; }
-	void connectAudioOutput(AudioOutput* iaudio) { audio = iaudio; }
+	void connectDma(IDmaRingBufferReadPos* iDmaReadPos) { dma = iDmaReadPos; }
     void cpuWrite(uint16_t addr, uint8_t data);
     uint8_t cpuRead(uint16_t addr);
-    bool clock() __attribute__((optimize("-O3"))) __attribute__((always_inline));
-	void clock(uint32_t cycles) __attribute__((optimize("-O3"), section(".ramfunc")));
+    force_inline bool clock();
+	void clock(uint32_t cycles) optimize_speed fast_code_section;
     void resetChannels();
-	uint32_t getDmaBufferPos() { return audio->getBufferReadPos(); }
+	uint32_t getDmaBufferPos() { return dma->getReadPos(); }
 	uint32_t getBufferSpace() { return (getDmaBufferPos() - buffer_index) % AUDIO_BUFFER_SIZE; }
 	bool isBufferFull() { return getBufferSpace() <= 16; }
     static int16_t audio_buffer[AUDIO_BUFFER_SIZE];
@@ -63,16 +61,11 @@ public:
 private:
 	Bus* bus = nullptr;
 	Cpu6502* cpu = nullptr;
-	AudioOutput* audio = nullptr;
+	IDmaRingBufferReadPos* dma = nullptr;
 
     uint32_t clock_counter = 0;
 	uint32_t pulse_hz = 0;
 	bool four_step_sequence_mode = true;
-
-    // double pulse_out = 0.0;
-	// double tnd_out = 0.0;
-	// double pulse_table[31];
-	// double tnd_table[203];
 
     // Duty sequences
     static constexpr uint8_t duty_sequences[4][8] =
@@ -220,9 +213,9 @@ private:
 
 	void generateSample();
 
-	void pulseChannelClock(sequencerUnit& seq, bool enable) __attribute__((always_inline));
-	void triangleChannelClock(triangleChannel& triangle, bool enable) __attribute__((always_inline));
-	void noiseChannelClock(noiseChannel& noise, bool enable) __attribute__((always_inline));
+	force_inline void pulseChannelClock(sequencerUnit& seq, bool enable);
+	force_inline void triangleChannelClock(triangleChannel& triangle, bool enable);
+	force_inline void noiseChannelClock(noiseChannel& noise, bool enable);
 	void DMCChannelClock(DMCChannel& DMC, bool enable);
     
 	void soundChannelEnvelopeClock(envelopeUnit& envelope);

@@ -68,6 +68,15 @@ Shell_t shell;
 extern const uint8_t _binary_sample_vgm_start;
 extern const unsigned int _binary_sample_vgm_size;
 
+class AudioOutput : public IDmaRingBufferReadPos
+{
+public:
+	virtual void playBuffer(int16_t* buffer, uint32_t size) = 0;
+	virtual void stop() = 0;
+	virtual void playBufferOnce(int16_t* buffer, uint32_t size) = 0;
+	virtual uint32_t getReadPos() const = 0;
+};
+
 class I2S_AudioOutput : public AudioOutput
 {
 public:
@@ -90,7 +99,7 @@ public:
         HAL_I2S_Transmit_DMA(&hi2s2, (uint16_t*)buffer, size);
     };
 
-    virtual uint32_t getBufferReadPos() override
+    virtual uint32_t getReadPos() const override
     {
         return AUDIO_BUFFER_SIZE - __HAL_DMA_GET_COUNTER(hi2s2.hdmatx);
     };
@@ -750,7 +759,7 @@ extern "C" void init()
 #endif
     printf("SysClk = %ld KHz" ENDL, HAL_RCC_GetSysClockFreq() / 1000);
 #endif
-    apu.connectAudioOutput(&audio_output);
+    apu.connectDma(&audio_output);
     apuInit();
 
     audio_output.playBuffer(apu.audio_buffer, AUDIO_BUFFER_SIZE);
@@ -759,6 +768,7 @@ extern "C" void init()
                                               (size_t)&_binary_sample_vgm_size,
                                               apu,
                                               stdout);
+    (void)status;
     audio_output.stop();                                  
 
     //emul_eeprom_init();
