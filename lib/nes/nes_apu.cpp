@@ -1,11 +1,14 @@
 /*
- * Apu2A03.cpp - NES APU (Audio Processing Unit) emulation
+ * nes_apu.cpp - NES APU (Audio Processing Unit) emulation
  * This source file has been taken (with minor adaptations) 
  * from the following repository:
  * https://github.com/Shim06/Anemoia-ESP32
+ * (original file name: apu2a03.cpp)
  */
 
-#include "apu2A03.h"
+#include "nes_apu.h"
+#include "nes_cpu.h"
+#include "nes_bus.h"
 #include "intrinsics.h"
 #include <cstdint>
 #include <cstring>

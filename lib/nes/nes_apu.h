@@ -1,13 +1,14 @@
 /*
- * Apu2A03.h - NES APU (Audio Processing Unit) emulation
+ * nes_apu.h - NES APU (Audio Processing Unit) emulation
  * This source file has been taken (with minor adaptations) 
  * from the following repository:
  * https://github.com/Shim06/Anemoia-ESP32
+ * (original file name: apu2a03.h)
  */
 #ifndef APU2A03_H
 #define APU2A03_H
 
-#include "intrinsics.h"
+#include <intrinsics.h>
 #include <cstdint>
 
 using namespace std;
@@ -16,17 +17,6 @@ using namespace std;
 
 class Bus;
 class Cpu6502;
-
-class Bus
-{
-public:
-	uint8_t cpuRead(uint16_t addr) { return 0; }
-};
-class Cpu6502
-{
-public:
-	int cycles = 0;
-};
 
 class IDmaRingBufferReadPos
 {
@@ -46,8 +36,8 @@ public:
 	void connectDma(IDmaRingBufferReadPos* iDmaReadPos) { dma = iDmaReadPos; }
     void cpuWrite(uint16_t addr, uint8_t data);
     uint8_t cpuRead(uint16_t addr);
-    force_inline bool clock();
-	void clock(uint32_t cycles) optimize_speed fast_code_section;
+    /*force_inline*/ bool clock();
+	void clock(uint32_t cycles) /*optimize_speed*/ fast_code_section;
     void resetChannels();
 	uint32_t getDmaBufferPos() { return dma->getReadPos(); }
 	uint32_t getBufferSpace() { return (getDmaBufferPos() - buffer_index) % AUDIO_BUFFER_SIZE; }

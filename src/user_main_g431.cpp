@@ -17,7 +17,9 @@
 #include <button.h>
 #include <shell.h>
 #include <vt100_terminal.h>
-#include <apu2A03.h>
+#include <nes_apu.h>
+#include <nes_cpu.h>
+#include <nes_bus.h>
 #include <vgm.h>
 
 #include <FreeRTOS.h>
@@ -65,8 +67,20 @@ Shell_t shell;
 //extern const uint8_t _binary_Unchained_vgm_start;
 //extern const unsigned int _binary_Unchained_vgm_size;
 
-extern const uint8_t _binary_sample_vgm_start;
-extern const unsigned int _binary_sample_vgm_size;
+//extern const uint8_t _binary_sample_vgm_start;
+//extern const unsigned int _binary_sample_vgm_size;
+
+//extern const uint8_t _binary_ball_nsf_start;
+//extern const unsigned int _binary_ball_nsf_size;
+
+//extern const uint8_t _binary_goal3_nsf_start;
+//extern const unsigned int _binary_goal3_nsf_size;
+
+extern const uint8_t _binary_mario_nsf_start;
+extern const unsigned int _binary_mario_nsf_size;
+
+#define NSF_ROM   ((uint8_t*)&_binary_mario_nsf_start)
+#define NSF_ROM_SIZE  ((unsigned int)&_binary_mario_nsf_size)
 
 class AudioOutput : public IDmaRingBufferReadPos
 {
@@ -106,9 +120,9 @@ public:
 };
 
 VgmPlayer vgm_player;
-Apu2A03 apu;
+//Apu2A03 apu;
 Bus bus;
-Cpu6502 cpu;
+//Cpu6502 cpu;
 I2S_AudioOutput audio_output;
 
 #if 0
@@ -548,14 +562,14 @@ bool shell_asc(FILE *f, ShellCmd_t *cmd, const char *s)
 bool shell_cmd_play_nes_chiptune(FILE *f, ShellCmd_t *cmd, const char *s)
 {
     fprintf(f, "Playing nes chiptune..." ENDL);
-    audio_output.playBuffer(apu.audio_buffer, AUDIO_BUFFER_SIZE);
+    //audio_output.playBuffer(apu.audio_buffer, AUDIO_BUFFER_SIZE);
 
-    VgmPlayer::Status status = vgm_player.play(&_binary_sample_vgm_start,
+    /*VgmPlayer::Status status = vgm_player.play(&_binary_sample_vgm_start,
                                               (size_t)&_binary_sample_vgm_size,
                                               apu,
-                                              stdout);
+                                              stdout);*/
     audio_output.stop();                                  
-    (void)status;
+    //(void)status;
 
     return true;
 }
@@ -719,8 +733,8 @@ void pulse_counter_init(void)
 
 void apuInit()
 {
-    apu.connectBus(&bus);
-    apu.connectCPU(&cpu);
+    bus.cpu.apu.connectBus(&bus);
+    bus.cpu.apu.connectCPU(&bus.cpu);
 
     array<uint8_t, 20> initialRegisters = {
         0x30, 0x08, 0x00, 0x00, // Pulse 1
@@ -730,12 +744,14 @@ void apuInit()
         0x00, 0x00, 0x00, 0x00, // DMC
     };
     for (size_t i = 0; i < initialRegisters.size(); i++) {
-        apu.cpuWrite(0x4000 + i, initialRegisters[i]);
+        bus.cpu.apu.cpuWrite(0x4000 + i, initialRegisters[i]);
     }
     // Enable all channels
-    apu.cpuWrite(0x4015, 0x0F);
-    apu.cpuWrite(0x4017, 0x40);
+    bus.cpu.apu.cpuWrite(0x4015, 0x0F);
+    bus.cpu.apu.cpuWrite(0x4017, 0x40);
 }   
+
+Cartridge nes_cart;
 
 extern "C" void init()
 {
@@ -759,17 +775,88 @@ extern "C" void init()
 #endif
     printf("SysClk = %ld KHz" ENDL, HAL_RCC_GetSysClockFreq() / 1000);
 #endif
-    apu.connectDma(&audio_output);
+    //apu.connectDma(&audio_output);
+    GpioPinPortB_t<10> keypad_key2;
+    GpioPinPortB_t<2> keypad_key1;
+    GpioPinPortB_t<0> keypad_key4;
+    GpioPinPortA_t<7> keypad_key3;
+    Keypad_4x1 keypad(&keypad_key1, &keypad_key2, &keypad_key3, &keypad_key4);
+    keypad.init();
+
+    bus.cpu.apu.connectDma(&audio_output);
     apuInit();
 
-    audio_output.playBuffer(apu.audio_buffer, AUDIO_BUFFER_SIZE);
+    const uint32_t NSF_HEADER_SIZE = 0x80;
+    uint32_t loadAddr = ((uint16_t*)NSF_ROM)[4];
+    uint32_t initFuncAddr = ((uint16_t*)NSF_ROM)[5];
+    uint32_t playFuncAddr = ((uint16_t*)NSF_ROM)[6];
+    uint32_t songCount = ((uint8_t*)NSF_ROM)[6];
+    uint32_t firstSong = ((uint8_t*)NSF_ROM)[7];
+    uint32_t songNo = firstSong;
+    uint32_t periodInUsecsNtsc = ((uint16_t*)NSF_ROM)[0x37];
+    uint32_t periodInUsecsPal = ((uint16_t*)NSF_ROM)[0x3C];
+    bool isDualNtscPal = (((uint8_t*)NSF_ROM)[0x7A] & 0x02) != 0;
+    bool isPal = (((uint8_t*)NSF_ROM)[0x7A] & 0x01) != 0;
+    bool isNtsc = isDualNtscPal || !isPal;
+    uint32_t periodInUsecs = isNtsc ? periodInUsecsNtsc : periodInUsecsPal;
+    nes_cart.addMemory(loadAddr, ((uint8_t*)NSF_ROM) + NSF_HEADER_SIZE, NSF_ROM_SIZE - NSF_HEADER_SIZE);
+    bus.cart = &nes_cart;
+    bus.cpu.connectBus(&bus);
+    audio_output.playBuffer(bus.cpu.apu.audio_buffer, AUDIO_BUFFER_SIZE);
+    uint32_t apuClksPerFrame = (uint64_t)894886 * periodInUsecs / 1000000;  // /*18623*50/60=15519, 14914*/
+    bool loadNewSong = true;
 
-    VgmPlayer::Status status = vgm_player.play(&_binary_sample_vgm_start,
+    while (true)
+    {
+        if (loadNewSong)
+        {
+            loadNewSong = false;
+            bus.cpu.reset();
+            bus.cpu.PC = initFuncAddr;
+            bus.cpu.A = songNo - 1;
+            bus.cpu.X = isNtsc ? 0 : 1;
+            bus.cpu.clock(100000);
+        }
+
+        bus.cpu.PC = playFuncAddr;
+        bus.cpu.SP = 0xFD;
+        bus.cpu.clock(100000);
+        bus.cpu.apu.clock(apuClksPerFrame);
+
+        button1.update();
+        button2.update();
+        //keypad.update();
+
+        if (button1.is_pressed_event())
+        {
+            songNo++;
+            if (songNo > songCount)
+            {
+                songNo = firstSong;
+            }
+            loadNewSong = true;
+        }
+
+        if (button2.is_pressed_event())
+        {
+            if (songNo == firstSong)
+            {
+                songNo = songCount;
+            }
+            else
+            {
+                songNo--;
+            }
+            loadNewSong = true;
+        }
+    }
+
+    /*VgmPlayer::Status status = vgm_player.play(&_binary_sample_vgm_start,
                                               (size_t)&_binary_sample_vgm_size,
                                               apu,
                                               stdout);
     (void)status;
-    audio_output.stop();                                  
+    audio_output.stop();*/
 
     //emul_eeprom_init();
 

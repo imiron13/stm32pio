@@ -1,6 +1,6 @@
 #include "vgm.h"
 #include "intrinsics.h"
-#include "apu2A03.h"
+#include "nes_apu.h"
 #include <cstdio>
 #include <cstdint>
 #include "hal_wrapper_stm32.h"
