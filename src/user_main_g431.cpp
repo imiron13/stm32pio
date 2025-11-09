@@ -26,6 +26,9 @@
 #include "task.h"
 #include "queue.h"
 #include "cmsis_os.h"
+#include "st7735.h"
+#include "st7735_vt100.h"
+#include "fonts.h"
 
 #include <keypad_4x1.h>
 extern "C" {
@@ -73,14 +76,14 @@ Shell_t shell;
 //extern const uint8_t _binary_ball_nsf_start;
 //extern const unsigned int _binary_ball_nsf_size;
 
-//extern const uint8_t _binary_goal3_nsf_start;
-//extern const unsigned int _binary_goal3_nsf_size;
+extern const uint8_t _binary_goal3_nsf_start;
+extern const unsigned int _binary_goal3_nsf_size;
 
-extern const uint8_t _binary_mario_nsf_start;
-extern const unsigned int _binary_mario_nsf_size;
+//extern const uint8_t _binary_mario_nsf_start;
+//extern const unsigned int _binary_mario_nsf_size;
 
-#define NSF_ROM   ((uint8_t*)&_binary_mario_nsf_start)
-#define NSF_ROM_SIZE  ((unsigned int)&_binary_mario_nsf_size)
+#define NSF_ROM   ((uint8_t*)&_binary_goal3_nsf_start)
+#define NSF_ROM_SIZE  ((unsigned int)&_binary_goal3_nsf_size)
 
 class AudioOutput : public IDmaRingBufferReadPos
 {
@@ -776,13 +779,21 @@ extern "C" void init()
     printf("SysClk = %ld KHz" ENDL, HAL_RCC_GetSysClockFreq() / 1000);
 #endif
     //apu.connectDma(&audio_output);
-    GpioPinPortB_t<10> keypad_key2;
+    /*GpioPinPortB_t<10> keypad_key2;
     GpioPinPortB_t<2> keypad_key1;
     GpioPinPortB_t<0> keypad_key4;
     GpioPinPortA_t<7> keypad_key3;
     Keypad_4x1 keypad(&keypad_key1, &keypad_key2, &keypad_key3, &keypad_key4);
-    keypad.init();
+    keypad.init();*/
 
+    ST7735_Init();
+    ST7735_FillScreen(ST7735_GREEN);
+    St7735_Vt100_t lcd_vt100_terminal;
+    lcd_vt100_terminal.init(Font_7x10);
+    FILE *flcd = lcd_vt100_terminal.fopen();
+    init_shell(flcd);
+    fprintf(flcd, "Hello from %s (FreeRTOS)!" ENDL, MCU_NAME_STR);
+    
     bus.cpu.apu.connectDma(&audio_output);
     apuInit();
 
