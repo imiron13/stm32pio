@@ -13,23 +13,19 @@ Bus::Bus()
     memset(RAM, 0, sizeof(RAM));
     cpu.connectBus(this);
     cpu.apu.connectBus(this);
-    //ppu.connectBus(this);
+    ppu.connectBus(this);
 }
 
 Bus::~Bus()
 {
 }
 
-IRAM_ATTR void Bus::cpuWrite(uint16_t addr, uint8_t data)
+IRAM_ATTR void Bus::cpuWriteNonRam(uint16_t addr, uint8_t data)
 {
     if (cart->cpuWrite(addr, data)) {}
-    else if ((addr & 0xE000) == 0x0000)
-    {
-        RAM[addr & 0x07FF] = data;
-    }
     else if ((addr & 0xE000) == 0x2000)
     {
-        //ppu.cpuWrite(addr, data);
+        ppu.cpuWrite(addr, data);
     }
     else if ((addr & 0xF000) == 0x4000 && (addr <= 0x4013 || addr == 0x4015 || addr == 0x4017))
     {
@@ -49,18 +45,27 @@ IRAM_ATTR void Bus::cpuWrite(uint16_t addr, uint8_t data)
     }
 }
 
-IRAM_ATTR uint8_t Bus::cpuRead(uint16_t addr)
+IRAM_ATTR void Bus::cpuWrite(uint16_t addr, uint8_t data)
+{
+    //total_writes++;
+    if (likely((addr & 0xE000) == 0x0000))
+    {
+        //ram_writes++;
+        RAM[addr & 0x07FF] = data;
+    }
+    else
+    {
+        cpuWriteNonRam(addr, data);
+    }
+}
+
+IRAM_ATTR uint8_t Bus::cpuReadNonRam(uint16_t addr)
 {
     uint8_t data = 0x00;
-
     if (cart->cpuRead(addr, data)) {}
-    else if ((addr & 0xE000) == 0x0000)
-    {   
-        data = RAM[addr & 0x07FF];
-    }
     else if ((addr & 0xE000) == 0x2000)
     {
-        //data = ppu.cpuRead(addr);
+        data = ppu.cpuRead(addr);
     }
     else if (addr == 0x4016)
     {
@@ -72,15 +77,32 @@ IRAM_ATTR uint8_t Bus::cpuRead(uint16_t addr)
     return data;
 }
 
-#if 0
-void Bus::reset()
+IRAM_ATTR uint8_t Bus::cpuRead(uint16_t addr)
 {
-    ptr_screen->fillScreen(TFT_BLACK);
-	for (auto& i : RAM) i = 0x00;
-    cart->reset();
-	cpu.reset();
-    cpu.apu.reset();
-	ppu.reset();
+    uint8_t data = 0x00;
+    //total_reads++;
+    if (likely((addr & 0xE000) == 0x0000))
+    {   
+        //ram_reads++;
+        data = RAM[addr & 0x07FF];
+    }
+    else
+    {
+        data = cpuReadNonRam(addr);
+    }
+    return data;
+}
+
+void Bus::cpuReadBlock(uint16_t addr, uint32_t size, uint8_t* data)
+{
+    if (cart->cpuReadBlock(addr, size, data)) {}
+    else
+    {
+        for (uint32_t i = 0; i < size; i++)
+        {
+            data[i] = cpuRead(addr + i);
+        }
+    }
 }
 
 IRAM_ATTR void Bus::clock()
@@ -117,6 +139,8 @@ IRAM_ATTR void Bus::clock()
             else { ppu.fakeSpriteHit(ppu_scanline + 2); }
         #endif
         cpu.clock(114);
+        //cpu.clock(30);
+        //cpu.apu.clock(341/2);
     }
 
     // Setup for the next frame
@@ -130,10 +154,11 @@ IRAM_ATTR void Bus::clock()
 
     ppu.clearVBlank();
     cpu.clock(114);
-
+    //cpu.apu.clock((113+2501+114)/2);
 
     frame_latch = !frame_latch;
 }
+
 
 IRAM_ATTR void Bus::setPPUMirrorMode(Cartridge::MIRROR mirror)
 {
@@ -150,13 +175,7 @@ IRAM_ATTR void Bus::OAM_Write(uint8_t addr, uint8_t data)
     ppu.ptr_sprite[addr] = data;
 }
 
-void Bus::insertCartridge(Cartridge* cartridge)
-{
-    cart = cartridge;
-    ppu.connectCartridge(cartridge);
-    cart->connectBus(this);
-}
-
+#if 0
 void Bus::connectScreen(TFT_eSPI* screen)
 {
     ptr_screen = screen;
@@ -170,6 +189,24 @@ IRAM_ATTR void Bus::renderImage(uint16_t scanline)
         ptr_screen->pushImage(32, scanline, 256, SCANLINES_PER_BUFFER, ppu.ptr_display);
     #endif
 } 
+#endif
+
+void Bus::insertCartridge(Cartridge* cartridge)
+{
+    cart = cartridge;
+    ppu.connectCartridge(cartridge);
+    cart->connectBus(this);
+}
+
+void Bus::reset()
+{
+    //ptr_screen->fillScreen(TFT_BLACK);
+	for (auto& i : RAM) i = 0x00;
+    cart->reset();
+	cpu.reset();
+    cpu.apu.reset();
+	ppu.reset();
+}
 
 IRAM_ATTR void Bus::IRQ()
 {
@@ -181,6 +218,7 @@ IRAM_ATTR void Bus::NMI()
     cpu.NMI();
 }
 
+#if 0
 void Bus::saveState()
 {
     if (!SD.exists("/states")) SD.mkdir("/states");

@@ -10,7 +10,7 @@
 #define CPU6502_H
 
 #include <stdint.h>
-
+#include <cstdio>
 #include <nes_apu.h>
 
 #define GET_FLAG(f) ((status & (f)) != 0)
@@ -18,6 +18,73 @@
 #define SET_ZN(v) (status = ((status & ~(Z | N)) | zn_table[(v)]))
 
 class Bus;
+
+template<int PREFETCH_SIZE>
+class Prefetcher
+{
+    uint32_t base_address = 0;
+    uint8_t buffer[PREFETCH_SIZE] __attribute__((aligned(4)));
+    uint32_t hit = 0;
+    uint32_t miss = 0;
+public:
+    void reset(uint32_t addr)
+    {
+        base_address = addr;
+        for (int i = 0; i < PREFETCH_SIZE; i++)
+            buffer[i] = 0;
+    }
+
+    void printStats()
+    {
+        printf("Prefetcher stats: hits=%lu, miss=%lu, hitrate=%lu%%" ENDL, hit, miss, (hit + miss) ? (100 * hit / (hit + miss)) : 0);
+    }
+
+    void prefetch(Bus* bus, uint32_t addr)
+    {
+        //if (addr >= base_address && addr < (base_address + PREFETCH_SIZE))
+        //    return;
+
+        base_address = addr & ~0x03;
+        bus->cpuReadBlock(base_address, PREFETCH_SIZE, buffer);
+    }
+
+    void resetStats()
+    {
+        hit = 0;
+        miss = 0;
+    }
+
+    uint8_t read(Bus* bus, uint32_t addr)
+    {
+        #if 0
+        return bus->cpuRead(addr);
+        #else
+        if (likely(addr >= base_address && addr < (base_address + PREFETCH_SIZE - 3)))
+        {
+            //hit++;
+            return buffer[addr - base_address];
+        }
+        else
+        {
+            //miss++;
+            prefetch(bus, addr);
+            return buffer[addr - base_address];
+        }
+        #endif
+    }
+
+    uint8_t readDirect(uint32_t addr)
+    {
+        return buffer[addr - base_address];
+    }
+
+    uint16_t readDirect16(uint32_t addr)
+    {
+        return *(uint16_t*)&buffer[addr - base_address];
+    }
+};
+
+
 class Cpu6502
 {
 public:
@@ -42,7 +109,7 @@ public:
 
     void apuWrite(uint16_t addr, uint8_t data);
     uint8_t apuRead(uint16_t addr);
-    void clock(int i);
+    void clock(int i) /*optimize_speed*/;
     void OAM_DMA(uint8_t page);
     void reset();
 
@@ -68,16 +135,22 @@ public:
     uint8_t opcode = 0x00;
     uint16_t cycles = 0;
     uint16_t temp = 0x0000;
-
+    uint32_t total_cycles __attribute__((used)) = 0;
+    uint32_t total_instructions __attribute__((used)) = 0;
 private: 
 	Bus* bus = nullptr;
     bool addrmode_implied = false;
-    uint8_t additional_cycle1 = 0;
-    uint8_t additional_cycle2 = 0;
+    uint_fast8_t additional_cycle1 = 0;
+    uint_fast8_t additional_cycle2 = 0;
     uint8_t fetch();
     uint8_t read(uint16_t addr);
+    void readBlock(uint16_t addr, uint32_t size, uint8_t* data);
     void write(uint16_t addr, uint8_t data);
     void OAM_Write(uint8_t addr, uint8_t data);
+    volatile bool en_print = false;
+    volatile bool en_bkpt = true;
+    volatile uint32_t bkpt = 0xC692;
+    volatile bool dummy = false;
 
 	// Addressing Modes
 	uint8_t ABS();	uint8_t IDX();
@@ -112,6 +185,8 @@ private:
     void DMC_DMA_Reload();
 
     uint16_t OAM_DMA_page = 0x00;
+public:
+    Prefetcher<32> cpu_prefetcher;
 };
 
 #endif

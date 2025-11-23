@@ -34,10 +34,11 @@ public:
     void connectBus(Bus* n) { bus = n; }
     void connectCPU(Cpu6502* n) { cpu = n; }
 	void connectDma(IDmaRingBufferReadPos* iDmaReadPos) { dma = iDmaReadPos; }
+	void reset();
     void cpuWrite(uint16_t addr, uint8_t data);
     uint8_t cpuRead(uint16_t addr);
-    /*force_inline*/ bool clock();
-	void clock(uint32_t cycles) /*optimize_speed*/ fast_code_section;
+    force_inline bool clock();
+	void clock(uint32_t cycles) optimize_speed /*fast_code_section*/;
     void resetChannels();
 	uint32_t getDmaBufferPos() { return dma->getReadPos(); }
 	uint32_t getBufferSpace() { return (getDmaBufferPos() - buffer_index) % AUDIO_BUFFER_SIZE; }
@@ -47,7 +48,7 @@ public:
     uint8_t DMC_sample_byte = 0;
 	bool IRQ = false;
 	uint32_t buffer_index = 0;
-
+	uint32_t total_cycles __attribute__((used)) = 0;
 private:
 	Bus* bus = nullptr;
 	Cpu6502* cpu = nullptr;

@@ -31,6 +31,31 @@ Apu2A03::~Apu2A03()
 
 }
 
+IRAM_ATTR void Apu2A03::reset()
+{
+	pulse1_enable = false;
+	pulse2_enable = false;
+	triangle_enable = false;
+	noise_enable = false;
+	DMC_enable = false;
+	IRQ = false;
+
+	pulse1.len_counter.timer = 0;
+	pulse2.len_counter.timer = 0;
+	triangle.len_counter.timer = 0;
+	noise.len_counter.timer = 0;
+
+	DMC.output_unit.output_level = 0;
+	DMC.output_unit.remaining_bits = 0;
+	DMC.output_unit.shift_register = 0;
+	DMC.memory_reader.address = 0;
+	DMC.memory_reader.remaining_bytes = 0;
+	DMC.timer = 0;
+	DMC.sample_address = 0;
+	DMC.sample_buffer = 0;
+	DMC.sample_length = 0;
+	DMC.output_unit.silence_flag = true;
+}
 
 IRAM_ATTR void Apu2A03::cpuWrite(uint16_t addr, uint8_t data)
 {
@@ -245,6 +270,7 @@ IRAM_ATTR uint8_t Apu2A03::cpuRead(uint16_t addr)
 	}
 	return data;
 }
+#include "cmsis_os.h"
 
 void Apu2A03::clock(uint32_t cycles)
 { 
@@ -253,8 +279,9 @@ void Apu2A03::clock(uint32_t cycles)
 	{
 		if (sample_ready)
 		{
-			while (isBufferFull())
+			//while (isBufferFull())
 			{
+				//osDelay(1);
 			}
 		}
 		sample_ready = clock(); 
@@ -263,6 +290,7 @@ void Apu2A03::clock(uint32_t cycles)
 
 IRAM_ATTR inline bool Apu2A03::clock()
 {
+	total_cycles++;
     // Clock all sound channels
     pulseChannelClock(pulse1.seq, pulse1_enable);
     pulseChannelClock(pulse2.seq, pulse2_enable);

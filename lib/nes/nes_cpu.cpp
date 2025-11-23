@@ -10,6 +10,8 @@
 #include "nes_bus.h"
 #include "intrinsics.h"
 #include <cstdint>
+#include <cstdio>
+#include <hal_wrapper_stm32.h>
 
 constexpr uint8_t Cpu6502::instr_cycles[256] = {
     7, 6, 2, 8, 3, 3, 5, 5, 3, 2, 2, 2, 4, 4, 6, 6,
@@ -70,6 +72,11 @@ inline IRAM_ATTR uint8_t Cpu6502::read(uint16_t addr)
 	return bus->cpuRead(addr);
 }
 
+void Cpu6502::readBlock(uint16_t addr, uint32_t size, uint8_t* data)
+{
+    bus->cpuReadBlock(addr, size, data);
+}
+
 inline IRAM_ATTR void Cpu6502::write(uint16_t addr, uint8_t data)
 {
 	bus->cpuWrite(addr, data);
@@ -91,21 +98,41 @@ IRAM_ATTR void Cpu6502::OAM_Write(uint8_t addr, uint8_t data)
     bus->OAM_Write(addr, data);
 }
 
-IRAM_ATTR void Cpu6502::clock(int i)
+void Cpu6502::clock(int i)
 {
-    for (int remaining_cycles = i; remaining_cycles > 0; remaining_cycles--)
-    {
-        if (cycles > 0) { cycles--; continue; }
+    //__disable_irq();
 
-        if (SP == 0x00 || SP == 0xFF)
+
+    total_cycles += i;
+    for (int remaining_cycles = i; remaining_cycles > 0; /*remaining_cycles--*/)
+    {
+        //if (cycles > 0) { cycles--; continue; }
+        remaining_cycles-=cycles+1;
+        /*if (remaining_cycles < 0)
+        {
+            cycles = -remaining_cycles - 1;
+            break;
+        }*/
+
+        /*if (SP == 0x00 || SP == 0xFF)
         {
             // Prevent stack overflow crash on BRK when SP is 0x00
             return;
-        }
-        opcode = read(PC++);
+        }*/
+        opcode = cpu_prefetcher.read(bus, PC++);
+        //opcode = read(PC++);
         cycles = instr_cycles[opcode];
         additional_cycle1 = 0;
         additional_cycle2 = 0;
+        //total_instructions++;
+        /*if (en_bkpt && PC - 1u == bkpt)
+        {
+            dummy = true;
+        }
+        if (en_print)
+        {
+            printf("Executing Opcode: %02X at PC: %04X" ENDL, opcode, PC - 1);
+        }*/
         switch (opcode)
         {
             case 0x00: EXECUTE(IMM, Instr_BRK); break;
@@ -393,9 +420,10 @@ IRAM_ATTR void Cpu6502::clock(int i)
         else
         {
             cycles -= remaining_cycles;
-            return;
+            break;
         }
     }
+    //__enable_irq();
 }
 
 void Cpu6502::reset()
@@ -405,6 +433,7 @@ void Cpu6502::reset()
 	uint8_t high_byte = read(addr_abs + 1);
 
 	PC = (high_byte << 8) | low_byte;
+    printf("CPU Reset. PC set to: %04X" ENDL, PC);
 	A = 0;
 	X = 0;
 	Y = 0;
@@ -432,22 +461,19 @@ inline IRAM_ATTR uint8_t Cpu6502::fetch()
 
 inline uint8_t Cpu6502::ABS()
 {
-	uint8_t low_byte = read(PC++);
-	uint8_t high_byte = read(PC++);
-
-	addr_abs = (high_byte << 8) | low_byte;
+	addr_abs = cpu_prefetcher.readDirect16(PC);
+    PC += 2;
 	return 0;
 }
 
 inline uint8_t Cpu6502::ABX()
 {
-	uint8_t low_byte = read(PC++);
-	uint8_t high_byte = read(PC++);
-
-	addr_abs = (high_byte << 8) | low_byte;
+	addr_abs = cpu_prefetcher.readDirect16(PC);
+    PC += 2;
+    uint8_t high_byte = (addr_abs >> 8) & 0x00FF;
 	addr_abs += X;
 
-	if ((addr_abs & 0xFF00) != (high_byte << 8))
+	if ((addr_abs >> 8) != high_byte)
 		return 1;
 	else
 		return 0;
@@ -455,13 +481,12 @@ inline uint8_t Cpu6502::ABX()
 
 inline uint8_t Cpu6502::ABY()
 {
-	uint8_t low_byte = read(PC++);
-	uint8_t high_byte = read(PC++);
-
-	addr_abs = (high_byte << 8) | low_byte;
+	addr_abs = cpu_prefetcher.readDirect16(PC);
+    PC += 2;
+    uint8_t high_byte = (addr_abs >> 8) & 0x00FF;
 	addr_abs += Y;
 
-	if ((addr_abs & 0xFF00) != (high_byte << 8))
+	if ((addr_abs >> 8) != high_byte)
 		return 1;
 	else
 		return 0;
@@ -483,11 +508,10 @@ inline uint8_t Cpu6502::IMP()
 
 inline uint8_t Cpu6502::IND()
 {
-	uint8_t low_byte = read(PC++);
-	uint8_t high_byte = read(PC++);
+	uint16_t ptr = cpu_prefetcher.readDirect16(PC);
+    PC += 2;
+    uint8_t low_byte = ptr & 0x00FF;
 
-	uint16_t ptr = (high_byte << 8) | low_byte;
-	
 	if (low_byte == 0xFF)
 	{
 		addr_abs = (read(ptr & 0xFF00) << 8) | read(ptr);
@@ -501,7 +525,7 @@ inline uint8_t Cpu6502::IND()
 
 inline uint8_t Cpu6502::IDX()
 {
-	uint8_t temp = read(PC++);
+	uint8_t temp = cpu_prefetcher.readDirect(PC++);
 
 	uint8_t low_byte = read((uint16_t)(temp + (uint16_t)X) & 0x00FF);
 	uint8_t high_byte = read((uint16_t)(temp + (uint16_t)X + 1) & 0x00FF);
@@ -512,7 +536,7 @@ inline uint8_t Cpu6502::IDX()
 
 inline uint8_t Cpu6502::IDY()
 {
-	uint8_t temp = read(PC++);
+	uint8_t temp = cpu_prefetcher.readDirect(PC++);
 
 	uint8_t low_byte = read(temp & 0x00FF);
 	uint8_t high_byte = read((temp + 1) & 0x00FF);
@@ -520,7 +544,7 @@ inline uint8_t Cpu6502::IDY()
 	addr_abs = (high_byte << 8) | low_byte;
 	addr_abs += Y;
 
-	if ((addr_abs & 0xFF00) != (high_byte << 8))
+	if ((addr_abs >> 8) != high_byte)
 		return 1;
 	else
 		return 0;
@@ -528,27 +552,27 @@ inline uint8_t Cpu6502::IDY()
 
 inline uint8_t Cpu6502::REL()
 {
-	addr_rel = read(PC++);
+	addr_rel = cpu_prefetcher.readDirect(PC++);
 	if (addr_rel & 0x80) addr_rel |= 0xFF00;
 	return 0;
 }
 
 inline uint8_t Cpu6502::ZPG()
 {
-	addr_abs = read(PC++);
+	addr_abs = cpu_prefetcher.readDirect(PC++);
 	return 0;
 }
 
 inline uint8_t Cpu6502::ZPX()
 {
-	addr_abs = read(PC++) + X;
+	addr_abs = cpu_prefetcher.readDirect(PC++) + X;
 	addr_abs &= 0x00FF;
 	return 0;
 }
 
 inline uint8_t Cpu6502::ZPY()
 {
-	addr_abs = read(PC++) + Y;
+	addr_abs = cpu_prefetcher.readDirect(PC++) + Y;
 	addr_abs &= 0x00FF;
 	return 0;
 }

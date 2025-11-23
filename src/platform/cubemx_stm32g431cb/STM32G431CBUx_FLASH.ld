@@ -55,14 +55,15 @@ ENTRY(Reset_Handler)
 /* Highest address of the user mode stack */
 _estack = ORIGIN(RAM) + LENGTH(RAM);    /* end of RAM */
 /* Generate a link error if heap and stack don't fit into RAM */
-_Min_Heap_Size = 0x1000;      /* required amount of heap  */
-_Min_Stack_Size = 0x1000; /* required amount of stack */
+_Min_Heap_Size = 0x200;      /* required amount of heap  */
+_Min_Stack_Size = 0x400; /* required amount of stack */
 
 /* Specify the memory areas */
 MEMORY
 {
 RAM (xrw)      : ORIGIN = 0x20000000, LENGTH = 32K
 FLASH (rx)      : ORIGIN = 0x8000000, LENGTH = 112K
+CCMRAM (xrw)   : ORIGIN = 0x10000000, LENGTH = 10K
 }
 
 /* Define output sections */
@@ -145,7 +146,14 @@ SECTIONS
     _edata = .;        /* define a global symbol at data end */
   } >RAM AT> FLASH
 
-  
+    /* --- RAMFUNC: code copied from FLASH → CCMRAM at startup --- */
+    .ramfunc :
+    {
+        _sramfunc = .;             /* VMA (execution address) start */
+        *(.ramfunc*)               /* any functions with section(".ramfunc") */
+        _eramfunc = .;
+    } > CCMRAM AT> FLASH         /* LMA (load address) is FLASH */
+
   /* Uninitialized data section */
   . = ALIGN(4);
   .bss :

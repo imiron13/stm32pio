@@ -192,7 +192,7 @@ void USB_LP_IRQHandler(void)
 /**
   * @brief This function handles TIM1 update interrupt and TIM16 global interrupt.
   */
-void TIM1_UP_TIM16_IRQHandler(void)
+__attribute__((used, externally_visible)) void TIM1_UP_TIM16_IRQHandler(void)
 {
   /* USER CODE BEGIN TIM1_UP_TIM16_IRQn 0 */
 

@@ -20,6 +20,7 @@
 #include <nes_apu.h>
 #include <nes_cpu.h>
 #include <nes_bus.h>
+#include <nes_cartridge.h>
 #include <vgm.h>
 
 #include <FreeRTOS.h>
@@ -31,9 +32,9 @@
 #include "fonts.h"
 
 #include <keypad_4x1.h>
-extern "C" {
+/*extern "C" {
 #include <eeprom_emul.h>
-}
+}*/
 
 using namespace std;
 
@@ -76,14 +77,20 @@ Shell_t shell;
 //extern const uint8_t _binary_ball_nsf_start;
 //extern const unsigned int _binary_ball_nsf_size;
 
-extern const uint8_t _binary_goal3_nsf_start;
-extern const unsigned int _binary_goal3_nsf_size;
+//extern const uint8_t _binary_goal3_nsf_start;
+//extern const unsigned int _binary_goal3_nsf_size;
 
 //extern const uint8_t _binary_mario_nsf_start;
 //extern const unsigned int _binary_mario_nsf_size;
 
-#define NSF_ROM   ((uint8_t*)&_binary_goal3_nsf_start)
-#define NSF_ROM_SIZE  ((unsigned int)&_binary_goal3_nsf_size)
+extern const uint8_t _binary_donk_nes_start;
+extern const unsigned int _binary_donk_nes_size;
+
+//extern const uint8_t _binary_baloon_nes_start;
+//extern const unsigned int _binary_baloon_nes_size;
+
+#define NSF_ROM   ((uint8_t*)&_binary_donk_nes_start)
+#define NSF_ROM_SIZE  ((unsigned int)&_binary_donk_nes_size)
 
 class AudioOutput : public IDmaRingBufferReadPos
 {
@@ -127,6 +134,102 @@ VgmPlayer vgm_player;
 Bus bus;
 //Cpu6502 cpu;
 I2S_AudioOutput audio_output;
+
+class DWT_Stats {
+public:
+    // Call once before using any counters
+    static void Init() {
+        // Enable trace in CoreDebug (required for DWT writes to be accepted on some parts)
+        CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+
+        // Try to enable all counters
+        DWT->CYCCNT = 0;
+        DWT->CPICNT = 0;
+        DWT->EXCCNT = 0;
+        DWT->SLEEPCNT = 0;
+        DWT->LSUCNT = 0;
+        DWT->FOLDCNT = 0;
+
+        // Set control bits: CYCCNTENA plus the event counter enable bits (if supported)
+        DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk
+                    | (1U << 8)   // CPICNTENA (implementation defined bit positions: CMSIS may not have named masks for these event counters)
+                    | (1U << 9)   // EXCCNTENA
+                    | (1U << 10)  // SLEEPCNTENA
+                    | (1U << 11)  // LSUCNTENA
+                    | (1U << 12); // FOLDCNTENA
+
+        // Read back to see which bits actually stuck
+        uint32_t ctrl = DWT->CTRL;
+        printf("DWT_CTRL = 0x%08lX" ENDL, (unsigned long)ctrl);
+        if (ctrl & DWT_CTRL_CYCCNTENA_Msk) printf("  CYCCNT enabled" ENDL); else printf("  CYCCNT NOT enabled" ENDL);
+        // event-counter enable bits do not have universally-named CMSIS masks, so check by position:
+        printf("  CPICNT bit %s" ENDL, (ctrl & (1U<<8)) ? "set" : "NOT set");
+        printf("  EXCCNT bit %s" ENDL, (ctrl & (1U<<9)) ? "set" : "NOT set");
+        printf("  SLEEPCNT bit %s" ENDL, (ctrl & (1U<<10)) ? "set" : "NOT set");
+        printf("  LSUCNT bit %s" ENDL, (ctrl & (1U<<11)) ? "set" : "NOT set");
+        printf("  FOLDCNT bit %s" ENDL, (ctrl & (1U<<12)) ? "set" : "NOT set");
+
+        // Reset counters after check
+        Reset();
+    }
+
+    // Reset all counters
+    static void Reset() {
+        DWT->CYCCNT   = 0;
+        DWT->CPICNT   = 0;
+        DWT->EXCCNT   = 0;
+        DWT->SLEEPCNT = 0;
+        DWT->LSUCNT   = 0;
+        DWT->FOLDCNT  = 0;
+    }
+
+    // Enable counters (cycle counter is always on once enabled)
+    static void Start() {
+        // Enable all event counters
+        // (bits 8-15 enable individual event counters)
+        DWT->CTRL |=
+            (1 << 0) |   // CYCCNTENA (bit0)
+            (1 << 8) |   // CPICNT
+            (1 << 9) |   // EXCCNT
+            (1 << 10) |  // SLEEPCNT
+            (1 << 11) |  // LSUCNT
+            (1 << 12);   // FOLDCNT
+    }
+
+    // Read all counters (optional helper struct)
+    struct Values {
+        uint32_t cycles;
+        uint32_t cpi;
+        uint32_t exceptions;
+        uint32_t sleep;
+        uint32_t lsu;
+        uint32_t fold;
+    };
+
+    static Values Read() {
+        Values v;
+        v.cycles     = DWT->CYCCNT;
+        v.cpi        = DWT->CPICNT;
+        v.exceptions = DWT->EXCCNT;
+        v.sleep      = DWT->SLEEPCNT;
+        v.lsu        = DWT->LSUCNT;
+        v.fold       = DWT->FOLDCNT;
+        return v;
+    }
+
+    // Print all counters with printf
+    static void Print() {
+        Values v = Read();
+
+        printf("DWT statistics:" ENDL);
+        printf("  CYCCNT    (cycles)       = %lu" ENDL, v.cycles);
+        printf("  CPICNT    (CPI stalls)   = %lu" ENDL, v.cpi);
+        printf("  EXCCNT    (exceptions)   = %lu" ENDL, v.exceptions);
+        printf("  SLEEPCNT  (sleep cycles) = %lu" ENDL, v.sleep);
+        printf("  LSUCNT    (LSU stalls)   = %lu" ENDL, v.lsu);
+        printf("  FOLDCNT   (folded inst.) = %lu" ENDL, v.fold);
+    }
+};
 
 #if 0
 bool shell_cmd_test_dac(FILE *f, ShellCmd_t *cmd, const char *s) {
@@ -209,7 +312,7 @@ bool shell_heap_stat(FILE *f, ShellCmd_t *cmd, const char *s)
     fprintf(f, "keepcost=%d" ENDL, heap_info.keepcost);  /* Top-most, releasable space (bytes) */
     return true;
 }
-
+#if 0
 bool shell_emul_eeprom_format(FILE *f, ShellCmd_t *cmd, const char *s)
 {
     HAL_FLASH_Unlock();
@@ -302,6 +405,7 @@ bool shell_emul_eeprom_write(FILE *f, ShellCmd_t *cmd, const char *s)
     }
     return true;
 }
+#endif
 
 #if 0
 const char* ascii_art_digits[11][7] = {
@@ -582,9 +686,9 @@ void init_shell(FILE *device=stdout)
     shell.add_command(ShellCmd_t("cls", "Clear screen", shell_cmd_clear_screen));
     shell.add_command(ShellCmd_t("led", "LED control", shell_cmd_led));
     shell.add_command(ShellCmd_t("heap", "", shell_heap_stat));
-    shell.add_command(ShellCmd_t("eeformat", "", shell_emul_eeprom_format));
+    /*shell.add_command(ShellCmd_t("eeformat", "", shell_emul_eeprom_format));
     shell.add_command(ShellCmd_t("eerd", "", shell_emul_eeprom_read));
-    shell.add_command(ShellCmd_t("eewr", "", shell_emul_eeprom_write));
+    shell.add_command(ShellCmd_t("eewr", "", shell_emul_eeprom_write));*/
     //shell.add_command(ShellCmd_t("pcnt", "", shell_pulse_counter_stat));
     //shell.add_command(ShellCmd_t("freq", "", shell_freq_measure));
     //shell.add_command(ShellCmd_t("asc", "", shell_asc));
@@ -596,12 +700,72 @@ void init_shell(FILE *device=stdout)
     shell.print_prompt();
 }
 
+extern "C" void task_nes_emu_main(void *argument);
+osThreadId_t task_handle_nes_emu_main;
+
+extern "C" void task_nes_emu_main(void *argument)
+{
+    //_disable_irq();
+    audio_output.playBuffer(bus.cpu.apu.audio_buffer, AUDIO_BUFFER_SIZE);
+    while (1)
+    {
+        uint32_t time_start = HAL_GetTick();
+        uint32_t elapsed;
+        static uint32_t fps __attribute__((used))= 0;
+        fps = 0;
+        while (1)
+        {
+            bus.clock();
+            elapsed = HAL_GetTick() - time_start;
+            if (elapsed >= 1000) break;
+
+            button1.update();
+            button2.update();
+            bus.controller = 0x00;
+            bus.controller |= (button1.is_pressed() ? Bus::CONTROLLER::Start : 0x00);
+            bus.controller |= (button2.is_pressed() ? Bus::CONTROLLER::A : 0x00);
+            fps++;
+        };
+        
+        //DWT_Stats::Print();
+        uint32_t cpu_cycles_per_sec = bus.cpu.total_cycles * 1000 / elapsed;
+        uint32_t apu_cycles_per_sec = bus.cpu.apu.total_cycles * 1000 / elapsed;
+        uint32_t apu_instructions_per_sec = bus.cpu.total_instructions * 1000 / elapsed;
+        bus.cpu.total_cycles = 0;
+        bus.cpu.apu.total_cycles = 0;
+        bus.cpu.total_instructions = 0;
+        printf("NES Emu: %lu fps, %lu cpu_cycles/sec, %lu apu_cycles/sec, %lu instr/sec elapsed=%lu ms" ENDL,
+               (unsigned long)fps,
+               (unsigned long)cpu_cycles_per_sec,
+               (unsigned long)apu_cycles_per_sec,
+               (unsigned long)apu_instructions_per_sec,
+               (unsigned long)elapsed);
+        bus.cpu.cpu_prefetcher.printStats();
+        bus.cpu.cpu_prefetcher.resetStats();
+        printf("Reads: %lu, ram_reads: %lu, Writes: %lu, ram_writes: %lu" ENDL,
+               (unsigned long)bus.total_reads,
+               (unsigned long)bus.ram_reads,
+               (unsigned long)bus.total_writes,
+               (unsigned long)bus.ram_writes);
+        //DWT_Stats::Reset();
+        //osDelay(10);
+    }
+    //__enable_irq();
+}
+
 extern "C" void task_user_input(void *argument);
 osThreadId_t task_handle_user_input;
 
 extern "C" void task_user_input(void *argument)
 {
-    GpioPinPortB_t<10> keypad_key2;
+
+    audio_output.playBuffer(bus.cpu.apu.audio_buffer, AUDIO_BUFFER_SIZE);
+    while (1)
+    {
+        bus.cpu.apu.clock(10);
+    }
+
+    /*GpioPinPortB_t<10> keypad_key2;
     GpioPinPortB_t<2> keypad_key1;
     GpioPinPortB_t<0> keypad_key4;
     GpioPinPortA_t<7> keypad_key3;
@@ -689,9 +853,10 @@ extern "C" void task_user_input(void *argument)
         }
         osDelay(50);
         button_update_divider_cnt++;
-    }       
+    }*/
 }
 
+#if 0
 void emul_eeprom_init()
 {
     HAL_FLASH_Unlock();
@@ -707,7 +872,7 @@ void emul_eeprom_init()
         return;
     }
 }
-
+#endif
 void pulse_counter_init(void)
 {
     __HAL_RCC_TIM2_CLK_ENABLE();
@@ -754,11 +919,11 @@ void apuInit()
     bus.cpu.apu.cpuWrite(0x4017, 0x40);
 }   
 
-Cartridge nes_cart;
+Cartridge nes_cart(NSF_ROM, NSF_ROM_SIZE);
 
 extern "C" void init()
 {
-#if 0
+#if 1
     MX_USB_DEVICE_Init();
 
     FILE *fuart1 = uart_fopen(&huart1);
@@ -786,17 +951,36 @@ extern "C" void init()
     Keypad_4x1 keypad(&keypad_key1, &keypad_key2, &keypad_key3, &keypad_key4);
     keypad.init();*/
 
-    ST7735_Init();
+    /*ST7735_Init();
     ST7735_FillScreen(ST7735_GREEN);
     St7735_Vt100_t lcd_vt100_terminal;
     lcd_vt100_terminal.init(Font_7x10);
     FILE *flcd = lcd_vt100_terminal.fopen();
     init_shell(flcd);
-    fprintf(flcd, "Hello from %s (FreeRTOS)!" ENDL, MCU_NAME_STR);
+    fprintf(flcd, "Hello from %s (FreeRTOS)!" ENDL, MCU_NAME_STR);*/
     
     bus.cpu.apu.connectDma(&audio_output);
-    apuInit();
+    bus.cpu.connectBus(&bus);
+    bus.insertCartridge(&nes_cart);
+    //apuInit();
+    bus.reset();
+    DWT_Stats::Init();
+    DWT_Stats::Start();
 
+    /*osThreadAttr_t defaultTask_attributes = { };
+    defaultTask_attributes.name = "task_user_input";
+    defaultTask_attributes.stack_size = 256 * 4;
+    defaultTask_attributes.priority = (osPriority_t) osPriorityNormal;
+    task_handle_user_input = osThreadNew(task_user_input, NULL, &defaultTask_attributes);*/
+
+    osThreadAttr_t nesEmuMainTask_attributes = { };
+    nesEmuMainTask_attributes.name = "task_nes_emu_main";
+    nesEmuMainTask_attributes.stack_size = 256 * 4;
+    nesEmuMainTask_attributes.priority = (osPriority_t) osPriorityNormal;
+
+    task_handle_nes_emu_main = osThreadNew(task_nes_emu_main, NULL, &nesEmuMainTask_attributes);
+
+#if 0
     const uint32_t NSF_HEADER_SIZE = 0x80;
     uint32_t loadAddr = ((uint16_t*)NSF_ROM)[4];
     uint32_t initFuncAddr = ((uint16_t*)NSF_ROM)[5];
@@ -810,9 +994,7 @@ extern "C" void init()
     bool isPal = (((uint8_t*)NSF_ROM)[0x7A] & 0x01) != 0;
     bool isNtsc = isDualNtscPal || !isPal;
     uint32_t periodInUsecs = isNtsc ? periodInUsecsNtsc : periodInUsecsPal;
-    nes_cart.addMemory(loadAddr, ((uint8_t*)NSF_ROM) + NSF_HEADER_SIZE, NSF_ROM_SIZE - NSF_HEADER_SIZE);
-    bus.cart = &nes_cart;
-    bus.cpu.connectBus(&bus);
+    //nes_cart.addMemory(loadAddr, ((uint8_t*)NSF_ROM) + NSF_HEADER_SIZE, NSF_ROM_SIZE - NSF_HEADER_SIZE);
     audio_output.playBuffer(bus.cpu.apu.audio_buffer, AUDIO_BUFFER_SIZE);
     uint32_t apuClksPerFrame = (uint64_t)894886 * periodInUsecs / 1000000;  // /*18623*50/60=15519, 14914*/
     bool loadNewSong = true;
@@ -873,11 +1055,6 @@ extern "C" void init()
 
     init_shell();  
     pulse_counter_init();
+#endif
 
-    osThreadAttr_t defaultTask_attributes = { };
-    defaultTask_attributes.name = "task_user_input";
-    defaultTask_attributes.stack_size = 256 * 4;
-    defaultTask_attributes.priority = (osPriority_t) osPriorityNormal;
-
-    task_handle_user_input = osThreadNew(task_user_input, NULL, &defaultTask_attributes);
 }
