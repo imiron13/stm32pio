@@ -13,13 +13,14 @@
 #include <cstdint>
 #include <cstring>
 #include <cstdio>
+#include <algorithm>
 
 using namespace std;
 
 #define DMA_ATTR
 #define IRAM_ATTR
-//#define SAMPLE_RATE 44100
-#define SAMPLE_RATE 22050
+#define SAMPLE_RATE 44100
+//#define SAMPLE_RATE 22050
 //#define SAMPLE_RATE 11025
 
 DMA_ATTR int16_t Apu2A03::audio_buffer[AUDIO_BUFFER_SIZE];
@@ -51,6 +52,10 @@ IRAM_ATTR void Apu2A03::reset()
 	pulse2.mute = true;
 	pulse1.next_cycle = INVALID_CYCLE;
 	pulse2.next_cycle = INVALID_CYCLE;
+	triangle.next_cycle = INVALID_CYCLE;
+	noise.next_cycle = INVALID_CYCLE;
+	DMC.next_cycle = INVALID_CYCLE;
+	generate_sample_next_cycle = 0;
 	triangle.next_cycle = 0;
 	noise.next_cycle = 0;
 	DMC.next_cycle = 0;
@@ -64,6 +69,7 @@ IRAM_ATTR void Apu2A03::reset()
 	DMC.sample_buffer = 0;
 	DMC.sample_length = 0;
 	DMC.output_unit.silence_flag = true;
+	updateNearestClockEvent();
 }
 
 IRAM_ATTR void Apu2A03::cpuWrite(uint16_t addr, uint8_t data)
@@ -105,6 +111,7 @@ IRAM_ATTR void Apu2A03::cpuWrite(uint16_t addr, uint8_t data)
 		pulse1.env.timer = pulse1.env.volume;
 		pulse1.env.decay_level_counter = 15;
 		pulse1.mute = (pulse2.seq.reload < 8) || (pulse2.len_counter.timer == 0);
+		updateNearestClockEvent();
 		break;
 
 	case 0x4004:
@@ -145,6 +152,7 @@ IRAM_ATTR void Apu2A03::cpuWrite(uint16_t addr, uint8_t data)
 		pulse2.env.timer = pulse2.env.volume;
 		pulse2.env.decay_level_counter = 15;
 		pulse2.mute = (pulse2.seq.reload < 8);
+		updateNearestClockEvent();
 		break;
 
 	case 0x4008:
@@ -163,6 +171,7 @@ IRAM_ATTR void Apu2A03::cpuWrite(uint16_t addr, uint8_t data)
 		triangle.next_cycle = triangle_enable ? clock_counter + triangle.seq.timer: INVALID_CYCLE;
 		if (triangle_enable) triangle.len_counter.timer = length_counter_lookup[data >> 3] + 1;
 		triangle.lin_counter.reload_flag = true;
+		updateNearestClockEvent();
 		break;
 
 	case 0x400C:
@@ -250,11 +259,13 @@ IRAM_ATTR void Apu2A03::cpuWrite(uint16_t addr, uint8_t data)
 		if ((data >> 3) & 0x01)
 		{
 			noise_enable = true;
+			noise.next_cycle = noise_enable ? clock_counter + noise.timer: INVALID_CYCLE;
 		}
 		else
 		{
 			noise_enable = false;
 			noise.len_counter.timer = 0;
+			noise.next_cycle = INVALID_CYCLE;
 		}
 
 		// DMC enable
@@ -271,6 +282,7 @@ IRAM_ATTR void Apu2A03::cpuWrite(uint16_t addr, uint8_t data)
 		{
 			DMC_enable = false;
 		}
+		updateNearestClockEvent();
 		break;
 
 	case 0x4017:
@@ -301,7 +313,7 @@ IRAM_ATTR uint8_t Apu2A03::cpuRead(uint16_t addr)
 void Apu2A03::clock(uint32_t cycles)
 { 
 	bool sample_ready = false;
-	for (uint32_t i = 0; i < cycles; i++) 
+	while (cycles > 0)
 	{
 		if (sample_ready)
 		{
@@ -310,8 +322,84 @@ void Apu2A03::clock(uint32_t cycles)
 				//osDelay(1);
 			}
 		}
+		if (nearest_clock_event >= cycles + clock_counter)
+		{
+			clock_counter += cycles;
+			cycles = 0;
+			break;
+		}
+
+		uint32_t dcycles = 1;
+		if ((int)(nearest_clock_event - clock_counter) >= 0)
+		{
+			dcycles = (nearest_clock_event - clock_counter) + 1;
+			clock_counter = nearest_clock_event;
+		}
+		cycles -= dcycles;
+
 		sample_ready = clock(); 
 	}
+}
+
+IRAM_ATTR inline bool Apu2A03::clock()
+{
+	//total_cycles++;
+    // Clock all sound channels
+	bool sample_generated = false;
+	if (clock_counter >= nearest_clock_event)
+	{
+		if (clock_counter >= pulse1.next_cycle)
+		{
+			pulseChannelClock(pulse1, pulse1_enable);
+		}
+		if (clock_counter >= pulse2.next_cycle)
+		{
+			pulseChannelClock(pulse2, pulse2_enable);
+		}
+		if (clock_counter >= noise.next_cycle)
+		{
+			noiseChannelClock(noise, noise_enable);
+		}
+		//DMCChannelClock(DMC, DMC_enable);
+		if (clock_counter >= triangle.next_cycle)
+		{
+			triangleChannelClock(triangle, triangle_enable);	
+		}
+
+		if (clock_counter >= clock_target)
+		{
+			phaseChange();
+		}
+
+		if (clock_counter >= generate_sample_next_cycle)
+		{
+			// Put sound channels output into audio buffers
+			// Generate sample every 20.29221088 clocks
+			// (NTSC_CPU_FREQ Hz / 2) / SAMPLE_RATE Hz
+			static const uint32_t T = NTSC_CPU_FREQ / 2;  // threshold
+			static const uint32_t S = SAMPLE_RATE;
+
+			static const uint32_t q = T / S;     // always a small integer
+			static const uint32_t r = T % S;     // remainder (< S)
+
+			generateSample();
+
+			// update accumulator
+			gen_phase += S;
+
+			// determine next interval (no division!)
+			uint32_t n = (gen_phase > r) ? q : (q + 1);
+
+			// update accumulator for event time
+			gen_phase -= n * S;
+
+			generate_sample_next_cycle = clock_counter + n;
+			updateNearestClockEvent();
+			sample_generated = true;
+		}
+    }
+	clock_counter++;
+	return sample_generated;
 }
 
 void Apu2A03::phaseChange()
@@ -404,42 +492,24 @@ void Apu2A03::phaseChange()
 	}
 }
 
-IRAM_ATTR inline bool Apu2A03::clock()
+template <class T>
+constexpr const T& min_multiple(const T& a) {
+    return a;
+}
+
+template <class T, class... Ts>
+constexpr const T& min_multiple(const T& a, const Ts&... args)
 {
-	//total_cycles++;
-    // Clock all sound channels
-	if (clock_counter >= pulse1.next_cycle)
-	{
-    	pulseChannelClock(pulse1, pulse1_enable);
-	}
-	if (clock_counter >= pulse2.next_cycle)
-	{
-    	pulseChannelClock(pulse2, pulse2_enable);
-	}
-    noiseChannelClock(noise, noise_enable);
-    //DMCChannelClock(DMC, DMC_enable);
-	if (clock_counter >= triangle.next_cycle)
-	{
-		triangleChannelClock(triangle, triangle_enable);	
-	}
+    const T* result = &a;
+    // each arg is bound as a reference, so &x is valid
+    ((result = (args < *result ? &args : result)), ...);
+    return *result;
+}
 
-	if (clock_counter == clock_target)
-	{
-		phaseChange();
-	}
-
-	// Put sound channels output into audio buffers
-	// Generate sample every 20.29221088 clocks
-	// (1.789773 MHz / 2) / 44100 Hz
-	clock_counter++;
-	pulse_hz += SAMPLE_RATE;
-	if (pulse_hz > 894886)
-	{
-		generateSample();
-		pulse_hz -= 894886;
-		return true;
-	}
-	return false;
+void Apu2A03::updateNearestClockEvent()
+{
+	// @TODO: handle wrap-around case
+	nearest_clock_event = min_multiple(pulse1.next_cycle, pulse2.next_cycle, triangle.next_cycle, noise.next_cycle, DMC.next_cycle, generate_sample_next_cycle);
 }
 
 IRAM_ATTR void Apu2A03::generateSample()
@@ -476,6 +546,7 @@ IRAM_ATTR inline void Apu2A03::pulseChannelClock(pulseChannel& ch, bool enable)
 	{
 		ch.seq.timer = ch.seq.reload;
 		ch.next_cycle = clock_counter + ch.seq.timer + 1;
+		updateNearestClockEvent();
 		// Shift duty cycle with wrapping
 		if (ch.mute)
 		{
@@ -496,6 +567,7 @@ IRAM_ATTR void Apu2A03::triangleChannelClock(triangleChannel& triangle, bool ena
 	{
 		triangle.seq.timer = triangle.seq.reload;
 		triangle.next_cycle = clock_counter + (triangle.seq.timer + 1) / 2;
+		updateNearestClockEvent();
 		if (!(triangle.len_counter.timer > 0 && triangle.lin_counter.counter > 0))
 			return;
 
@@ -510,12 +582,14 @@ IRAM_ATTR void Apu2A03::triangleChannelClock(triangleChannel& triangle, bool ena
 
 IRAM_ATTR void Apu2A03::noiseChannelClock(noiseChannel& noise, bool enable)
 {   
-	if (!enable) return; // Temp
+	/*if (!enable) return; // Temp
 
 	noise.timer--;
-	if (unlikely(noise.timer == 0xFFFF))
+	if (unlikely(noise.timer == 0xFFFF))*/
 	{
 		noise.timer = noise.reload;
+		noise.next_cycle = clock_counter + noise.timer + 1;
+		updateNearestClockEvent();
 		uint8_t temp = noise.mode ? (noise.shift_register >> 6) & 0x01 : (noise.shift_register >> 1) & 0x01;
 		noise.output = (noise.shift_register & 0x01) ^ (temp);
 		noise.shift_register >>= 1;

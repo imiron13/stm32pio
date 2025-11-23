@@ -39,6 +39,7 @@ public:
     uint8_t cpuRead(uint16_t addr);
     force_inline bool clock();
 	void clock(uint32_t cycles) optimize_speed /*fast_code_section*/;
+	void updateNearestClockEvent();
     void resetChannels();
 	uint32_t getDmaBufferPos() { return dma->getReadPos(); }
 	uint32_t getBufferSpace() { return (getDmaBufferPos() - buffer_index) % AUDIO_BUFFER_SIZE; }
@@ -50,8 +51,11 @@ public:
 	uint32_t buffer_index = 0;
 	uint32_t total_cycles __attribute__((used)) = 0;
 private:
+	static const uint32_t NTSC_CPU_FREQ = 1789773;
 	static const uint32_t INVALID_CYCLE = 0xFFFFFFFF;
 	uint32_t phase = 0;
+	uint32_t generate_sample_next_cycle = 0;
+	uint32_t gen_phase = 0;
 	Bus* bus = nullptr;
 	Cpu6502* cpu = nullptr;
 	IDmaRingBufferReadPos* dma = nullptr;
@@ -60,6 +64,7 @@ private:
 	uint32_t pulse_hz = 0;
 	bool four_step_sequence_mode = true;
 	uint32_t clock_target = 3728;
+	uint32_t nearest_clock_event = INVALID_CYCLE;
 
     // Duty sequences
     static constexpr uint8_t duty_sequences[4][8] =
