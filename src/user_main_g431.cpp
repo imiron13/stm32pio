@@ -77,20 +77,23 @@ Shell_t shell;
 //extern const uint8_t _binary_ball_nsf_start;
 //extern const unsigned int _binary_ball_nsf_size;
 
-//extern const uint8_t _binary_goal3_nsf_start;
-//extern const unsigned int _binary_goal3_nsf_size;
+extern const uint8_t _binary_goal3_nsf_start;
+extern const unsigned int _binary_goal3_nsf_size;
 
 //extern const uint8_t _binary_mario_nsf_start;
 //extern const unsigned int _binary_mario_nsf_size;
 
-extern const uint8_t _binary_donk_nes_start;
-extern const unsigned int _binary_donk_nes_size;
+//extern const uint8_t _binary_donk_nes_start;
+//extern const unsigned int _binary_donk_nes_size;
 
 //extern const uint8_t _binary_baloon_nes_start;
 //extern const unsigned int _binary_baloon_nes_size;
 
-#define NSF_ROM   ((uint8_t*)&_binary_donk_nes_start)
-#define NSF_ROM_SIZE  ((unsigned int)&_binary_donk_nes_size)
+//#define NSF_ROM   ((uint8_t*)&_binary_donk_nes_start)
+//#define NSF_ROM_SIZE  ((unsigned int)&_binary_donk_nes_size)
+
+#define NSF_ROM   ((uint8_t*)&_binary_goal3_nsf_start)
+#define NSF_ROM_SIZE  ((unsigned int)&_binary_goal3_nsf_size)
 
 class AudioOutput : public IDmaRingBufferReadPos
 {
@@ -903,8 +906,8 @@ void pulse_counter_init(void)
 
 void apuInit()
 {
-    bus.cpu.apu.connectBus(&bus);
-    bus.cpu.apu.connectCPU(&bus.cpu);
+    //bus.cpu.apu.connectBus(&bus);
+    //bus.cpu.apu.connectCPU(&bus.cpu);
 
     array<uint8_t, 20> initialRegisters = {
         0x30, 0x08, 0x00, 0x00, // Pulse 1
@@ -921,7 +924,9 @@ void apuInit()
     bus.cpu.apu.cpuWrite(0x4017, 0x40);
 }   
 
-Cartridge nes_cart(NSF_ROM, NSF_ROM_SIZE);
+const uint32_t NSF_HEADER_SIZE = 0x80;
+
+Cartridge nes_cart(NSF_ROM, NSF_ROM_SIZE, true);
 
 extern "C" void init()
 {
@@ -964,7 +969,6 @@ extern "C" void init()
     bus.cpu.apu.connectDma(&audio_output);
     bus.cpu.connectBus(&bus);
     bus.insertCartridge(&nes_cart);
-    //apuInit();
     bus.reset();
     DWT_Stats::Init();
     DWT_Stats::Start();
@@ -975,15 +979,14 @@ extern "C" void init()
     defaultTask_attributes.priority = (osPriority_t) osPriorityNormal;
     task_handle_user_input = osThreadNew(task_user_input, NULL, &defaultTask_attributes);*/
 
-    osThreadAttr_t nesEmuMainTask_attributes = { };
+    /*osThreadAttr_t nesEmuMainTask_attributes = { };
     nesEmuMainTask_attributes.name = "task_nes_emu_main";
     nesEmuMainTask_attributes.stack_size = 256 * 4;
     nesEmuMainTask_attributes.priority = (osPriority_t) osPriorityNormal;
 
-    task_handle_nes_emu_main = osThreadNew(task_nes_emu_main, NULL, &nesEmuMainTask_attributes);
+    task_handle_nes_emu_main = osThreadNew(task_nes_emu_main, NULL, &nesEmuMainTask_attributes);*/
 
-#if 0
-    const uint32_t NSF_HEADER_SIZE = 0x80;
+#if 1
     uint32_t loadAddr = ((uint16_t*)NSF_ROM)[4];
     uint32_t initFuncAddr = ((uint16_t*)NSF_ROM)[5];
     uint32_t playFuncAddr = ((uint16_t*)NSF_ROM)[6];
@@ -1006,7 +1009,9 @@ extern "C" void init()
         if (loadNewSong)
         {
             loadNewSong = false;
-            bus.cpu.reset();
+            bus.reset();
+            apuInit();
+            //bus.cpu.reset();
             bus.cpu.PC = initFuncAddr;
             bus.cpu.A = songNo - 1;
             bus.cpu.X = isNtsc ? 0 : 1;
