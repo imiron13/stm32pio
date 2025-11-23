@@ -104,23 +104,12 @@ void Cpu6502::clock(int i)
 
 
     total_cycles += i;
-    for (int remaining_cycles = i; remaining_cycles > 0; /*remaining_cycles--*/)
+    for (int remaining_cycles = i; remaining_cycles > 0; remaining_cycles--)
     {
-        //if (cycles > 0) { cycles--; continue; }
-        remaining_cycles-=cycles+1;
-        /*if (remaining_cycles < 0)
-        {
-            cycles = -remaining_cycles - 1;
-            break;
-        }*/
+        if (cycles > 0) { cycles--; continue; }
 
-        /*if (SP == 0x00 || SP == 0xFF)
-        {
-            // Prevent stack overflow crash on BRK when SP is 0x00
-            return;
-        }*/
         opcode = cpu_prefetcher.read(bus, PC++);
-        //opcode = read(PC++);
+
         cycles = instr_cycles[opcode];
         additional_cycle1 = 0;
         additional_cycle2 = 0;
@@ -662,14 +651,14 @@ inline uint8_t Cpu6502::Instr_TYA()
 
 inline uint8_t Cpu6502::Instr_PHA()
 {
-    write(0x0100 + SP, A);
+    bus->cpuStackWrite(SP, A);
     SP--;
     return 0;
 }
 
 inline uint8_t Cpu6502::Instr_PHP()
 {
-    write(0x0100 + SP, status | B | U);
+    bus->cpuStackWrite(SP, status | B | U);
     status &= ~B;
     status |= U;
     SP--;
@@ -679,7 +668,7 @@ inline uint8_t Cpu6502::Instr_PHP()
 inline uint8_t Cpu6502::Instr_PLA()
 {
     SP++;
-    A = read(0x0100 + SP);
+    A = bus->cpuStackRead(SP);
     SET_ZN(A);
     return 0;
 }
@@ -687,7 +676,7 @@ inline uint8_t Cpu6502::Instr_PLA()
 inline uint8_t Cpu6502::Instr_PLP()
 {
     SP++;
-    status = read(0x0100 + SP);
+    status = bus->cpuStackRead(SP);
     status &= ~B;
     status |= U;
     return 0;
@@ -1031,9 +1020,9 @@ inline uint8_t Cpu6502::Instr_JMP()
 inline uint8_t Cpu6502::Instr_JSR()
 {
     PC--;
-    write(0x0100 + SP, (PC >> 8) & 0x00FF);
-    write(0x0100 + (uint8_t)(SP - 1), PC & 0x00FF);
-
+    //bus->cpuStackWrite(SP, (PC >> 8) & 0x00FF);
+    //bus->cpuStackWrite((uint8_t)(SP - 1), PC & 0x00FF);
+    bus->cpuStackWrite16(SP-1, PC);
     SP -= 2;
     PC = addr_abs;
     return 0;
@@ -1041,9 +1030,9 @@ inline uint8_t Cpu6502::Instr_JSR()
 
 inline uint8_t Cpu6502::Instr_RTS()
 {
-    PC = read(0x0100 | (uint8_t)(SP + 1));
-    PC |= read(0x0100 | (uint8_t)(SP + 2)) << 8;
-
+    //PC = bus->cpuStackRead((uint8_t)(SP + 1));
+    //PC |= bus->cpuStackRead((uint8_t)(SP + 2)) << 8;
+    PC = bus->cpuStackRead16((uint8_t)(SP + 1));
     SP += 2;
     PC++;
     return 0;
@@ -1051,10 +1040,11 @@ inline uint8_t Cpu6502::Instr_RTS()
 
 inline uint8_t Cpu6502::Instr_BRK()
 {
-    write(0x0100 |  SP, (PC >> 8) & 0x00FF);
-    write(0x0100 | (uint8_t)(SP - 1), PC & 0x00FF);
+    //bus->cpuStackWrite(SP, (PC >> 8) & 0x00FF);
+    //bus->cpuStackWrite((uint8_t)(SP - 1), PC & 0x00FF);
+    bus->cpuStackWrite16((uint8_t)(SP - 1), PC);
     status |= (U | B);
-    write(0x0100 | (uint8_t)(SP - 2), status);
+    bus->cpuStackWrite((uint8_t)(SP - 2), status);
     status &= ~B;
     status |= I;
 
@@ -1068,12 +1058,13 @@ inline uint8_t Cpu6502::Instr_BRK()
 
 inline uint8_t Cpu6502::Instr_RTI()
 {
-    status = read(0x0100 | (uint8_t)(SP + 1));
+    status = bus->cpuStackRead((uint8_t)(SP + 1));
     status &= ~B;
     status |= U;
 
-    PC = (uint16_t)read(0x0100 | (uint8_t)(SP + 2));
-    PC |= (uint16_t)read(0x0100 | (uint8_t)(SP + 3)) << 8;
+    //PC = (uint16_t)bus->cpuStackRead((uint8_t)(SP + 2));
+    //PC |= (uint16_t)bus->cpuStackRead((uint8_t)(SP + 3)) << 8;
+    PC = bus->cpuStackRead16((uint8_t)(SP + 2));
     SP += 3;
     return 0;
 }
@@ -1102,10 +1093,10 @@ void Cpu6502::IRQ()
 {
     if (GET_FLAG(I) == 0)
     {
-        write(0x0100 | SP, (PC >> 8) & 0x00FF);
-        write(0x0100 | (uint8_t)(SP - 1), PC & 0x00FF);
-
-        write(0x0100 | (uint8_t)(SP - 2), status);
+        //bus->cpuStackWrite((uint8_t)(SP), (PC >> 8) & 0x00FF);
+        //bus->cpuStackWrite((uint8_t)(SP - 1), PC & 0x00FF);
+        bus->cpuStackWrite16((uint8_t)(SP - 1), PC);
+        bus->cpuStackWrite((uint8_t)(SP - 2), status);
 
         status |= I;
 
@@ -1121,10 +1112,10 @@ void Cpu6502::IRQ()
 
 void Cpu6502::NMI()
 {
-    write(0x0100 | SP, (PC >> 8) & 0x00FF);
-    write(0x0100 | (uint8_t)(SP - 1), PC & 0x00FF);
-
-    write(0x0100 | (uint8_t)(SP - 2), status);
+    //bus->cpuStackWrite((uint8_t)(SP), (PC >> 8) & 0x00FF);
+    //bus->cpuStackWrite((uint8_t)(SP - 1), PC & 0x00FF);
+    bus->cpuStackWrite16((uint8_t)(SP - 1), PC);
+    bus->cpuStackWrite((uint8_t)(SP - 2), status);
 
     status |= I;
 

@@ -45,20 +45,6 @@ IRAM_ATTR void Bus::cpuWriteNonRam(uint16_t addr, uint8_t data)
     }
 }
 
-IRAM_ATTR void Bus::cpuWrite(uint16_t addr, uint8_t data)
-{
-    //total_writes++;
-    if (likely((addr & 0xE000) == 0x0000))
-    {
-        //ram_writes++;
-        RAM[addr & 0x07FF] = data;
-    }
-    else
-    {
-        cpuWriteNonRam(addr, data);
-    }
-}
-
 IRAM_ATTR uint8_t Bus::cpuReadNonRam(uint16_t addr)
 {
     uint8_t data = 0x00;
@@ -73,22 +59,6 @@ IRAM_ATTR uint8_t Bus::cpuReadNonRam(uint16_t addr)
         if (!controller_strobe)
             controller_state >>= 1;
         data = value | 0x40;
-    }
-    return data;
-}
-
-IRAM_ATTR uint8_t Bus::cpuRead(uint16_t addr)
-{
-    uint8_t data = 0x00;
-    //total_reads++;
-    if (likely((addr & 0xE000) == 0x0000))
-    {   
-        //ram_reads++;
-        data = RAM[addr & 0x07FF];
-    }
-    else
-    {
-        data = cpuReadNonRam(addr);
     }
     return data;
 }
@@ -140,7 +110,7 @@ IRAM_ATTR void Bus::clock()
         #endif
         cpu.clock(114);
         //cpu.clock(30);
-        //cpu.apu.clock(341/2);
+        cpu.apu.clock(341/2);
     }
 
     // Setup for the next frame
@@ -154,7 +124,7 @@ IRAM_ATTR void Bus::clock()
 
     ppu.clearVBlank();
     cpu.clock(114);
-    //cpu.apu.clock((113+2501+114)/2);
+    cpu.apu.clock((113+2501+114)/2);
 
     frame_latch = !frame_latch;
 }

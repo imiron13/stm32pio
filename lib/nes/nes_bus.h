@@ -83,10 +83,54 @@ public:
     void insertCartridge(Cartridge* cartridge);
     void reset();
     void clock() optimize_speed;
-	uint8_t cpuRead(uint16_t addr);
+	uint8_t cpuRead(uint16_t addr)
+    {
+        uint8_t data = 0x00;
+        //total_reads++;
+        if (likely((addr & 0xE000) == 0x0000))
+        {   
+            //ram_reads++;
+            data = RAM[addr & 0x07FF];
+        }
+        else
+        {
+            data = cpuReadNonRam(addr);
+        }
+        return data;
+    }
+    uint8_t cpuStackRead(uint8_t ofs)
+    {
+        return ram_page1[ofs];
+    }
+    uint16_t cpuStackRead16(uint8_t ofs)
+    {
+        return *(uint16_t*)&ram_page1[ofs];
+    }
+
     uint8_t cpuReadNonRam(uint16_t addr);
     void cpuReadBlock(uint16_t addr, uint32_t size, uint8_t* data);
-	void cpuWrite(uint16_t addr, uint8_t data);
+    void cpuWrite(uint16_t addr, uint8_t data)
+    {
+        //total_writes++;
+        if (likely((addr & 0xE000) == 0x0000))
+        {
+            //ram_writes++;
+            RAM[addr & 0x07FF] = data;
+        }
+        else
+        {
+            cpuWriteNonRam(addr, data);
+        }
+    }
+
+    void cpuStackWrite(uint8_t ofs, uint8_t data)
+    {
+        ram_page1[ofs] = data;
+    }
+    void cpuStackWrite16(uint8_t ofs, uint16_t data)
+    {
+        *(uint16_t*)&ram_page1[ofs] = data;
+    }
     void cpuWriteNonRam(uint16_t addr, uint8_t data);
     void setPPUMirrorMode(Cartridge::MIRROR mirror);
     Cartridge::MIRROR getPPUMirrorMode();
@@ -96,6 +140,7 @@ public:
 
 private:
     uint8_t RAM[2048];
+    uint8_t *ram_page1 = &RAM[0x100]; // 0x0100-0x01FF stack page
     uint8_t controller_state;
     uint8_t controller_strobe = 0x00;    
     bool frame_latch = false;

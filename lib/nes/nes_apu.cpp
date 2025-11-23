@@ -279,7 +279,7 @@ void Apu2A03::clock(uint32_t cycles)
 	{
 		if (sample_ready)
 		{
-			//while (isBufferFull())
+			while (isBufferFull())
 			{
 				//osDelay(1);
 			}

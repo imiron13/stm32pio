@@ -705,31 +705,32 @@ osThreadId_t task_handle_nes_emu_main;
 
 extern "C" void task_nes_emu_main(void *argument)
 {
-    //_disable_irq();
+
     audio_output.playBuffer(bus.cpu.apu.audio_buffer, AUDIO_BUFFER_SIZE);
     while (1)
     {
-        uint32_t time_start = HAL_GetTick();
+        __disable_irq();
+        uint32_t time_start = DWT->CYCCNT;
         uint32_t elapsed;
-        static uint32_t fps __attribute__((used))= 0;
-        fps = 0;
-        while (1)
+        uint32_t frame __attribute__((used))= 0;
+        for (frame = 0; frame < 100; frame++)
         {
             bus.clock();
-            elapsed = HAL_GetTick() - time_start;
-            if (elapsed >= 1000) break;
 
             button1.update();
             button2.update();
             bus.controller = 0x00;
             bus.controller |= (button1.is_pressed() ? Bus::CONTROLLER::Start : 0x00);
             bus.controller |= (button2.is_pressed() ? Bus::CONTROLLER::A : 0x00);
-            fps++;
         };
         
         //DWT_Stats::Print();
-        uint32_t cpu_cycles_per_sec = bus.cpu.total_cycles * 1000 / elapsed;
-        uint32_t apu_cycles_per_sec = bus.cpu.apu.total_cycles * 1000 / elapsed;
+        elapsed = DWT->CYCCNT - time_start;
+        __enable_irq();
+        uint32_t cycles_per_frame = elapsed / frame;
+        uint32_t fps = SystemCoreClock / cycles_per_frame;
+        uint32_t cpu_cycles_per_sec = fps * 299280; // NTSC CPU cycles per frame
+        uint32_t apu_cycles_per_sec = fps * 299280 / 2;
         uint32_t apu_instructions_per_sec = bus.cpu.total_instructions * 1000 / elapsed;
         bus.cpu.total_cycles = 0;
         bus.cpu.apu.total_cycles = 0;
@@ -747,10 +748,11 @@ extern "C" void task_nes_emu_main(void *argument)
                (unsigned long)bus.ram_reads,
                (unsigned long)bus.total_writes,
                (unsigned long)bus.ram_writes);
+        printf("Cycles per frame: %lu" ENDL, (unsigned long)cycles_per_frame);
         //DWT_Stats::Reset();
         //osDelay(10);
     }
-    //__enable_irq();
+
 }
 
 extern "C" void task_user_input(void *argument);
