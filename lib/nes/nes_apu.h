@@ -50,6 +50,8 @@ public:
 	uint32_t buffer_index = 0;
 	uint32_t total_cycles __attribute__((used)) = 0;
 private:
+	static const uint32_t INVALID_CYCLE = 0xFFFFFFFF;
+	uint32_t phase = 0;
 	Bus* bus = nullptr;
 	Cpu6502* cpu = nullptr;
 	IDmaRingBufferReadPos* dma = nullptr;
@@ -152,12 +154,14 @@ private:
 		sweepUnit sweep;
 		length_counter len_counter;
 		bool mute = false;
+		uint32_t next_cycle = 0;
 	};
 	struct triangleChannel
 	{
 		sequencerUnit seq;
 		length_counter len_counter;
 		linear_counter lin_counter;
+		uint32_t next_cycle = 0;
 	};
 	struct noiseChannel
 	{
@@ -168,6 +172,7 @@ private:
 		uint16_t shift_register = 0x01;
 		uint8_t output = 0x00;
 		bool mode = false;
+		uint32_t next_cycle = 0;
 	};
 	struct DMCChannel
 	{
@@ -181,6 +186,7 @@ private:
 		uint16_t reload = 0x0000;
 		outputUnit output_unit;
 		memoryReader memory_reader;
+		uint32_t next_cycle = 0;
 	};
 
 	bool interrupt_inhibit = false;
@@ -211,6 +217,7 @@ private:
 	force_inline void noiseChannelClock(noiseChannel& noise, bool enable);
 	void DMCChannelClock(DMCChannel& DMC, bool enable);
     
+	void phaseChange();
 	void soundChannelEnvelopeClock(envelopeUnit& envelope);
 	void soundChannelSweeperClock(pulseChannel& channel);
 	void soundChannelLengthCounterClock(length_counter& len_counter);

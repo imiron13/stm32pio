@@ -41,6 +41,7 @@ IRAM_ATTR void Apu2A03::reset()
 	noise_enable = false;
 	DMC_enable = false;
 	IRQ = false;
+	phase = 0;
 
 	pulse1.len_counter.timer = 0;
 	pulse2.len_counter.timer = 0;
@@ -48,6 +49,11 @@ IRAM_ATTR void Apu2A03::reset()
 	noise.len_counter.timer = 0;
 	pulse1.mute = true;
 	pulse2.mute = true;
+	pulse1.next_cycle = INVALID_CYCLE;
+	pulse2.next_cycle = INVALID_CYCLE;
+	triangle.next_cycle = 0;
+	noise.next_cycle = 0;
+	DMC.next_cycle = 0;
 	DMC.output_unit.output_level = 0;
 	DMC.output_unit.remaining_bits = 0;
 	DMC.output_unit.shift_register = 0;
@@ -90,6 +96,7 @@ IRAM_ATTR void Apu2A03::cpuWrite(uint16_t addr, uint8_t data)
 		pulse1.seq.cycle_position = 0;
 		pulse1.seq.reload = (pulse1.seq.reload & 0x00FF) | (uint16_t)((data & 0x07) << 8);
 		pulse1.seq.timer = pulse1.seq.reload;
+		pulse1.next_cycle = pulse1_enable ? clock_counter + pulse1.seq.timer: INVALID_CYCLE;
 		pulse1.env.start_flag = true;	
 
 		if (pulse1_enable) pulse1.len_counter.timer = length_counter_lookup[data >> 3] + 1;
@@ -126,6 +133,7 @@ IRAM_ATTR void Apu2A03::cpuWrite(uint16_t addr, uint8_t data)
 		pulse2.seq.cycle_position = 0;
 		pulse2.seq.reload = (pulse2.seq.reload & 0x00FF) | (uint16_t)((data & 0x07) << 8);
 		pulse2.seq.timer = pulse2.seq.reload;
+		pulse2.next_cycle = pulse2_enable ? clock_counter + pulse2.seq.timer: INVALID_CYCLE;
 		pulse2.env.start_flag = true;
 
 		if (pulse2_enable) {
@@ -152,7 +160,7 @@ IRAM_ATTR void Apu2A03::cpuWrite(uint16_t addr, uint8_t data)
 	case 0x400B:
 		triangle.seq.reload = ((triangle.seq.reload & 0x00FF) | (uint16_t)((data & 0x07)) << 8) + 1;
 		triangle.seq.timer = triangle.seq.reload;
-
+		triangle.next_cycle = triangle_enable ? clock_counter + triangle.seq.timer: INVALID_CYCLE;
 		if (triangle_enable) triangle.len_counter.timer = length_counter_lookup[data >> 3] + 1;
 		triangle.lin_counter.reload_flag = true;
 		break;
@@ -201,10 +209,12 @@ IRAM_ATTR void Apu2A03::cpuWrite(uint16_t addr, uint8_t data)
 		if (data & 0x01)
 		{
 			pulse1_enable = true;
+			pulse1.next_cycle = pulse1_enable ? clock_counter + pulse1.seq.timer: INVALID_CYCLE;
 		}
 		else
 		{
 			pulse1_enable = false;
+			pulse1.next_cycle = INVALID_CYCLE;
 			pulse1.len_counter.timer = 0;
 			pulse1.mute = true;
 		}
@@ -213,22 +223,26 @@ IRAM_ATTR void Apu2A03::cpuWrite(uint16_t addr, uint8_t data)
 		if ((data >> 1) & 0x01)
 		{
 			pulse2_enable = true;
+			pulse2.next_cycle = pulse2_enable ? clock_counter + pulse2.seq.timer: INVALID_CYCLE;
 		}
 		else
 		{
 			pulse2_enable = false;
 			pulse2.len_counter.timer = 0;
 			pulse2.mute = true;
+			pulse2.next_cycle = INVALID_CYCLE;
 		}
 
 		// Triangle enable
 		if ((data >> 2) & 0x01)
 		{
 			triangle_enable = true;
+			triangle.next_cycle = triangle_enable ? clock_counter + triangle.seq.timer: INVALID_CYCLE;
 		}
 		else
 		{
 			triangle_enable = false;
+			triangle.next_cycle = INVALID_CYCLE;
 			triangle.len_counter.timer = 0;
 		}
 
@@ -300,30 +314,50 @@ void Apu2A03::clock(uint32_t cycles)
 	}
 }
 
-IRAM_ATTR inline bool Apu2A03::clock()
+void Apu2A03::phaseChange()
 {
-	//total_cycles++;
-    // Clock all sound channels
-    pulseChannelClock(pulse1, pulse1_enable);
-    pulseChannelClock(pulse2, pulse2_enable);
-    noiseChannelClock(noise, noise_enable);
-    //DMCChannelClock(DMC, DMC_enable);
-	triangleChannelClock(triangle, triangle_enable);
-	triangleChannelClock(triangle, triangle_enable);
-
-	if (clock_counter == clock_target)
+	switch (phase)
 	{
-		switch (clock_counter)
-		{
-		case 3728:
-			soundChannelEnvelopeClock(pulse1.env);
-			soundChannelEnvelopeClock(pulse2.env);
-			soundChannelEnvelopeClock(noise.env);
-			linearCounterClock(triangle.lin_counter);
-			clock_target = 7456;
-			break;
+	case 0:
+		soundChannelEnvelopeClock(pulse1.env);
+		soundChannelEnvelopeClock(pulse2.env);
+		soundChannelEnvelopeClock(noise.env);
+		linearCounterClock(triangle.lin_counter);
+		clock_target += 7456 - 3728;
+		phase = 1;
+		break;
 
-		case 7456:
+	case 1:
+		soundChannelEnvelopeClock(pulse1.env);
+		soundChannelEnvelopeClock(pulse2.env);
+		soundChannelEnvelopeClock(noise.env);
+		linearCounterClock(triangle.lin_counter);
+		
+		soundChannelSweeperClock(pulse1);
+		soundChannelLengthCounterClock(pulse1.len_counter);
+
+		soundChannelSweeperClock(pulse2);
+		soundChannelLengthCounterClock(pulse2.len_counter);
+
+		soundChannelLengthCounterClock(triangle.len_counter);
+		soundChannelLengthCounterClock(noise.len_counter);
+		clock_target += 11185 - 7456;
+		phase = 2;
+		break;
+
+	case 2:
+		soundChannelEnvelopeClock(pulse1.env);
+		soundChannelEnvelopeClock(pulse2.env);
+		soundChannelEnvelopeClock(noise.env);
+		linearCounterClock(triangle.lin_counter);
+		clock_target += 14914 - 11185;
+		phase = 3;
+		break;
+
+	case 3:
+		if (four_step_sequence_mode)
+		{
+			if (!interrupt_inhibit) IRQ = true;
 			soundChannelEnvelopeClock(pulse1.env);
 			soundChannelEnvelopeClock(pulse2.env);
 			soundChannelEnvelopeClock(noise.env);
@@ -337,79 +371,62 @@ IRAM_ATTR inline bool Apu2A03::clock()
 
 			soundChannelLengthCounterClock(triangle.len_counter);
 			soundChannelLengthCounterClock(noise.len_counter);
-			clock_target = 11185;
-			break;
+			clock_target += 3728;
+			phase = 0;
+		}
+		else
+		{
+			clock_target += 18640 - 14914;
+			phase = 4;
+		}
+		break;
 
-		case 11185:
+	case 4:
+		if (!four_step_sequence_mode)
+		{
 			soundChannelEnvelopeClock(pulse1.env);
 			soundChannelEnvelopeClock(pulse2.env);
 			soundChannelEnvelopeClock(noise.env);
 			linearCounterClock(triangle.lin_counter);
-			clock_target = 14914;
-			break;
+			
+			soundChannelSweeperClock(pulse1);
+			soundChannelLengthCounterClock(pulse1.len_counter);
 
-		case 14914:
-			if (four_step_sequence_mode)
-			{
-				if (!interrupt_inhibit) IRQ = true;
-				soundChannelEnvelopeClock(pulse1.env);
-				soundChannelEnvelopeClock(pulse2.env);
-				soundChannelEnvelopeClock(noise.env);
-				linearCounterClock(triangle.lin_counter);
-				
-				soundChannelSweeperClock(pulse1);
-				soundChannelLengthCounterClock(pulse1.len_counter);
+			soundChannelSweeperClock(pulse2);
+			soundChannelLengthCounterClock(pulse2.len_counter);
 
-				soundChannelSweeperClock(pulse2);
-				soundChannelLengthCounterClock(pulse2.len_counter);
-
-				soundChannelLengthCounterClock(triangle.len_counter);
-				soundChannelLengthCounterClock(noise.len_counter);
-				clock_counter = 0;
-				clock_target = 3728;
-			}
-			else
-			{
-				clock_target = 18640;
-			}
-			break;
-
-		case 18640:
-			if (!four_step_sequence_mode)
-			{
-				soundChannelEnvelopeClock(pulse1.env);
-				soundChannelEnvelopeClock(pulse2.env);
-				soundChannelEnvelopeClock(noise.env);
-				linearCounterClock(triangle.lin_counter);
-				
-				soundChannelSweeperClock(pulse1);
-				soundChannelLengthCounterClock(pulse1.len_counter);
-
-				soundChannelSweeperClock(pulse2);
-				soundChannelLengthCounterClock(pulse2.len_counter);
-
-				soundChannelLengthCounterClock(triangle.len_counter);
-				soundChannelLengthCounterClock(noise.len_counter);
-				clock_counter = 0;
-				clock_target = 3728;
-			}
-			break;
+			soundChannelLengthCounterClock(triangle.len_counter);
+			soundChannelLengthCounterClock(noise.len_counter);
+			clock_target += 3728;
+			phase = 0;
 		}
+		break;
+	}
+}
+
+IRAM_ATTR inline bool Apu2A03::clock()
+{
+	//total_cycles++;
+    // Clock all sound channels
+	if (clock_counter >= pulse1.next_cycle)
+	{
+    	pulseChannelClock(pulse1, pulse1_enable);
+	}
+	if (clock_counter >= pulse2.next_cycle)
+	{
+    	pulseChannelClock(pulse2, pulse2_enable);
+	}
+    noiseChannelClock(noise, noise_enable);
+    //DMCChannelClock(DMC, DMC_enable);
+	if (clock_counter >= triangle.next_cycle)
+	{
+		triangleChannelClock(triangle, triangle_enable);	
 	}
 
-	// Mute sound channels if muted
-	#if 0
-	if (pulse1.mute)
+	if (clock_counter == clock_target)
 	{
-		pulse1.seq.output = 0;
-		pulse1.env.output = 0;
+		phaseChange();
 	}
-	if (pulse2.mute)
-	{
-		pulse2.seq.output = 0;
-		pulse2.env.output = 0;
-	}
-	#endif
 
 	// Put sound channels output into audio buffers
 	// Generate sample every 20.29221088 clocks
@@ -453,11 +470,12 @@ IRAM_ATTR void Apu2A03::generateSample()
 
 IRAM_ATTR inline void Apu2A03::pulseChannelClock(pulseChannel& ch, bool enable)
 {
-	if (!enable) return;
+	/*if (!enable) return;
 	ch.seq.timer--;
-	if (unlikely(ch.seq.timer == 0xFFFF))
+	if (unlikely(ch.seq.timer == 0xFFFF))*/
 	{
 		ch.seq.timer = ch.seq.reload;
+		ch.next_cycle = clock_counter + ch.seq.timer + 1;
 		// Shift duty cycle with wrapping
 		if (ch.mute)
 		{
@@ -471,12 +489,13 @@ IRAM_ATTR inline void Apu2A03::pulseChannelClock(pulseChannel& ch, bool enable)
 
 IRAM_ATTR void Apu2A03::triangleChannelClock(triangleChannel& triangle, bool enable)
 {
-	if (!enable) return; // Temp
+	/*if (!enable) return;
 
 	triangle.seq.timer--;
-	if (unlikely(triangle.seq.timer == 0))
+	if (unlikely(triangle.seq.timer == 0))*/
 	{
 		triangle.seq.timer = triangle.seq.reload;
+		triangle.next_cycle = clock_counter + (triangle.seq.timer + 1) / 2;
 		if (!(triangle.len_counter.timer > 0 && triangle.lin_counter.counter > 0))
 			return;
 
