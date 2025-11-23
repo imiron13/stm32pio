@@ -57,6 +57,7 @@ private:
     uint32_t clock_counter = 0;
 	uint32_t pulse_hz = 0;
 	bool four_step_sequence_mode = true;
+	uint32_t clock_target = 3728;
 
     // Duty sequences
     static constexpr uint8_t duty_sequences[4][8] =
@@ -150,6 +151,7 @@ private:
 		envelopeUnit env;
 		sweepUnit sweep;
 		length_counter len_counter;
+		bool mute = false;
 	};
 	struct triangleChannel
 	{
@@ -204,7 +206,7 @@ private:
 
 	void generateSample();
 
-	force_inline void pulseChannelClock(sequencerUnit& seq, bool enable);
+	force_inline void pulseChannelClock(pulseChannel& ch, bool enable);
 	force_inline void triangleChannelClock(triangleChannel& triangle, bool enable);
 	force_inline void noiseChannelClock(noiseChannel& noise, bool enable);
 	void DMCChannelClock(DMCChannel& DMC, bool enable);

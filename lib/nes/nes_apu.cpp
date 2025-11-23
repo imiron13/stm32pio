@@ -18,7 +18,9 @@ using namespace std;
 
 #define DMA_ATTR
 #define IRAM_ATTR
-#define SAMPLE_RATE 44100
+//#define SAMPLE_RATE 44100
+#define SAMPLE_RATE 22050
+//#define SAMPLE_RATE 11025
 
 DMA_ATTR int16_t Apu2A03::audio_buffer[AUDIO_BUFFER_SIZE];
 
@@ -44,7 +46,8 @@ IRAM_ATTR void Apu2A03::reset()
 	pulse2.len_counter.timer = 0;
 	triangle.len_counter.timer = 0;
 	noise.len_counter.timer = 0;
-
+	pulse1.mute = true;
+	pulse2.mute = true;
 	DMC.output_unit.output_level = 0;
 	DMC.output_unit.remaining_bits = 0;
 	DMC.output_unit.shift_register = 0;
@@ -80,6 +83,7 @@ IRAM_ATTR void Apu2A03::cpuWrite(uint16_t addr, uint8_t data)
 
 	case 0x4002:
 		pulse1.seq.reload = (pulse1.seq.reload & 0xFF00) | data;
+		pulse1.mute = (pulse1.seq.reload < 8);
 		break;
 
 	case 0x4003:
@@ -93,6 +97,7 @@ IRAM_ATTR void Apu2A03::cpuWrite(uint16_t addr, uint8_t data)
 		// Restart envelope
 		pulse1.env.timer = pulse1.env.volume;
 		pulse1.env.decay_level_counter = 15;
+		pulse1.mute = (pulse2.seq.reload < 8) || (pulse2.len_counter.timer == 0);
 		break;
 
 	case 0x4004:
@@ -114,6 +119,7 @@ IRAM_ATTR void Apu2A03::cpuWrite(uint16_t addr, uint8_t data)
 
 	case 0x4006:
 		pulse2.seq.reload = (pulse2.seq.reload & 0xFF00) | data;
+		pulse2.mute = (pulse2.seq.reload < 8);
 		break;
 
 	case 0x4007:
@@ -122,11 +128,15 @@ IRAM_ATTR void Apu2A03::cpuWrite(uint16_t addr, uint8_t data)
 		pulse2.seq.timer = pulse2.seq.reload;
 		pulse2.env.start_flag = true;
 
-		if (pulse2_enable) pulse2.len_counter.timer = length_counter_lookup[data >> 3] + 1;
+		if (pulse2_enable) {
+			pulse2.len_counter.timer = length_counter_lookup[data >> 3] + 1;
+			pulse2.mute = (pulse2.len_counter.timer == 0);
+		}
 
 		// Restart envelope
 		pulse2.env.timer = pulse2.env.volume;
 		pulse2.env.decay_level_counter = 15;
+		pulse2.mute = (pulse2.seq.reload < 8);
 		break;
 
 	case 0x4008:
@@ -196,6 +206,7 @@ IRAM_ATTR void Apu2A03::cpuWrite(uint16_t addr, uint8_t data)
 		{
 			pulse1_enable = false;
 			pulse1.len_counter.timer = 0;
+			pulse1.mute = true;
 		}
 
 		// Pulse 2 enable
@@ -207,6 +218,7 @@ IRAM_ATTR void Apu2A03::cpuWrite(uint16_t addr, uint8_t data)
 		{
 			pulse2_enable = false;
 			pulse2.len_counter.timer = 0;
+			pulse2.mute = true;
 		}
 
 		// Triangle enable
@@ -290,51 +302,28 @@ void Apu2A03::clock(uint32_t cycles)
 
 IRAM_ATTR inline bool Apu2A03::clock()
 {
-	total_cycles++;
+	//total_cycles++;
     // Clock all sound channels
-    pulseChannelClock(pulse1.seq, pulse1_enable);
-    pulseChannelClock(pulse2.seq, pulse2_enable);
+    pulseChannelClock(pulse1, pulse1_enable);
+    pulseChannelClock(pulse2, pulse2_enable);
     noiseChannelClock(noise, noise_enable);
     //DMCChannelClock(DMC, DMC_enable);
 	triangleChannelClock(triangle, triangle_enable);
 	triangleChannelClock(triangle, triangle_enable);
 
-    switch (clock_counter)
-    {
-    case 3728:
-		soundChannelEnvelopeClock(pulse1.env);
-		soundChannelEnvelopeClock(pulse2.env);
-		soundChannelEnvelopeClock(noise.env);
-		linearCounterClock(triangle.lin_counter);
-        break;
+	if (clock_counter == clock_target)
+	{
+		switch (clock_counter)
+		{
+		case 3728:
+			soundChannelEnvelopeClock(pulse1.env);
+			soundChannelEnvelopeClock(pulse2.env);
+			soundChannelEnvelopeClock(noise.env);
+			linearCounterClock(triangle.lin_counter);
+			clock_target = 7456;
+			break;
 
-    case 7456:
-		soundChannelEnvelopeClock(pulse1.env);
-		soundChannelEnvelopeClock(pulse2.env);
-		soundChannelEnvelopeClock(noise.env);
-		linearCounterClock(triangle.lin_counter);
-		
-		soundChannelSweeperClock(pulse1);
-		soundChannelLengthCounterClock(pulse1.len_counter);
-
-		soundChannelSweeperClock(pulse2);
-		soundChannelLengthCounterClock(pulse2.len_counter);
-
-		soundChannelLengthCounterClock(triangle.len_counter);
-		soundChannelLengthCounterClock(noise.len_counter);
-        break;
-
-    case 11185:
-		soundChannelEnvelopeClock(pulse1.env);
-		soundChannelEnvelopeClock(pulse2.env);
-		soundChannelEnvelopeClock(noise.env);
-		linearCounterClock(triangle.lin_counter);
-        break;
-
-    case 14914:
-        if (four_step_sequence_mode)
-        {
-            if (!interrupt_inhibit) IRQ = true;
+		case 7456:
 			soundChannelEnvelopeClock(pulse1.env);
 			soundChannelEnvelopeClock(pulse2.env);
 			soundChannelEnvelopeClock(noise.env);
@@ -348,39 +337,74 @@ IRAM_ATTR inline bool Apu2A03::clock()
 
 			soundChannelLengthCounterClock(triangle.len_counter);
 			soundChannelLengthCounterClock(noise.len_counter);
-            clock_counter = 0;
-        }
-        break;
+			clock_target = 11185;
+			break;
 
-    case 18640:
-        if (!four_step_sequence_mode)
-        {
+		case 11185:
 			soundChannelEnvelopeClock(pulse1.env);
 			soundChannelEnvelopeClock(pulse2.env);
 			soundChannelEnvelopeClock(noise.env);
 			linearCounterClock(triangle.lin_counter);
-			
-			soundChannelSweeperClock(pulse1);
-			soundChannelLengthCounterClock(pulse1.len_counter);
+			clock_target = 14914;
+			break;
 
-			soundChannelSweeperClock(pulse2);
-			soundChannelLengthCounterClock(pulse2.len_counter);
+		case 14914:
+			if (four_step_sequence_mode)
+			{
+				if (!interrupt_inhibit) IRQ = true;
+				soundChannelEnvelopeClock(pulse1.env);
+				soundChannelEnvelopeClock(pulse2.env);
+				soundChannelEnvelopeClock(noise.env);
+				linearCounterClock(triangle.lin_counter);
+				
+				soundChannelSweeperClock(pulse1);
+				soundChannelLengthCounterClock(pulse1.len_counter);
 
-			soundChannelLengthCounterClock(triangle.len_counter);
-			soundChannelLengthCounterClock(noise.len_counter);
-            clock_counter = 0;
-        }
-        break;
-    }
+				soundChannelSweeperClock(pulse2);
+				soundChannelLengthCounterClock(pulse2.len_counter);
+
+				soundChannelLengthCounterClock(triangle.len_counter);
+				soundChannelLengthCounterClock(noise.len_counter);
+				clock_counter = 0;
+				clock_target = 3728;
+			}
+			else
+			{
+				clock_target = 18640;
+			}
+			break;
+
+		case 18640:
+			if (!four_step_sequence_mode)
+			{
+				soundChannelEnvelopeClock(pulse1.env);
+				soundChannelEnvelopeClock(pulse2.env);
+				soundChannelEnvelopeClock(noise.env);
+				linearCounterClock(triangle.lin_counter);
+				
+				soundChannelSweeperClock(pulse1);
+				soundChannelLengthCounterClock(pulse1.len_counter);
+
+				soundChannelSweeperClock(pulse2);
+				soundChannelLengthCounterClock(pulse2.len_counter);
+
+				soundChannelLengthCounterClock(triangle.len_counter);
+				soundChannelLengthCounterClock(noise.len_counter);
+				clock_counter = 0;
+				clock_target = 3728;
+			}
+			break;
+		}
+	}
 
 	// Mute sound channels if muted
-	#if 1
-	if (pulse1.sweep.mute || pulse1.seq.reload < 8 || pulse1.len_counter.timer == 0)
+	#if 0
+	if (pulse1.mute)
 	{
 		pulse1.seq.output = 0;
 		pulse1.env.output = 0;
 	}
-	if (pulse2.sweep.mute || pulse2.seq.reload < 8 || pulse2.len_counter.timer == 0)
+	if (pulse2.mute)
 	{
 		pulse2.seq.output = 0;
 		pulse2.env.output = 0;
@@ -427,17 +451,21 @@ IRAM_ATTR void Apu2A03::generateSample()
     }
 }
 
-IRAM_ATTR inline void Apu2A03::pulseChannelClock(sequencerUnit& seq, bool enable)
+IRAM_ATTR inline void Apu2A03::pulseChannelClock(pulseChannel& ch, bool enable)
 {
 	if (!enable) return;
-	seq.timer--;
-	if (unlikely(seq.timer == 0xFFFF))
+	ch.seq.timer--;
+	if (unlikely(ch.seq.timer == 0xFFFF))
 	{
-		seq.timer = seq.reload;
+		ch.seq.timer = ch.seq.reload;
 		// Shift duty cycle with wrapping
-		seq.output = duty_sequences[seq.duty_cycle][seq.cycle_position];
-		seq.cycle_position++;
-		if (seq.cycle_position >= 8) seq.cycle_position = 0;
+		if (ch.mute)
+		{
+			ch.seq.output = 0;
+		}
+		else ch.seq.output = duty_sequences[ch.seq.duty_cycle][ch.seq.cycle_position];
+		ch.seq.cycle_position++;
+		if (ch.seq.cycle_position >= 8) ch.seq.cycle_position = 0;
 	}
 }
 
@@ -562,15 +590,26 @@ IRAM_ATTR void Apu2A03::soundChannelSweeperClock(pulseChannel& channel)
 		channel.sweep.target_period = 0;
 
 	// Check if channel should be muted
-	if (channel.seq.reload < 8) channel.sweep.mute = true;
-	else if (channel.sweep.target_period > 0x7FF) channel.sweep.mute = true;
-	else channel.sweep.mute = false;
+	if (channel.seq.reload < 8) {
+		channel.sweep.mute = true;
+		channel.mute = true;
+	}
+	else if (channel.sweep.target_period > 0x7FF) {
+		channel.sweep.mute = true;
+		channel.mute = true;
+	}
+	else {
+		channel.sweep.mute = false;
+		channel.mute = false;
+	}
 
 	channel.sweep.timer--;
 	if (channel.sweep.enable && channel.sweep.timer == 0 && channel.sweep.shift_count != 0)
 	{
-		if (!channel.sweep.mute)
+		if (!channel.sweep.mute) {
 			channel.seq.reload = channel.sweep.target_period;
+			channel.mute = (channel.seq.reload < 8);
+		}
 	}
 	if (channel.sweep.timer == 0 || channel.sweep.reload_flag)
 	{
