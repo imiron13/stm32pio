@@ -77,8 +77,6 @@ Shell_t shell;
 //extern const uint8_t _binary_ball_nsf_start;
 //extern const unsigned int _binary_ball_nsf_size;
 
-extern const uint8_t _binary_goal3_nsf_start;
-extern const unsigned int _binary_goal3_nsf_size;
 
 //extern const uint8_t _binary_mario_nsf_start;
 //extern const unsigned int _binary_mario_nsf_size;
@@ -91,9 +89,23 @@ extern const unsigned int _binary_goal3_nsf_size;
 
 //#define NSF_ROM   ((uint8_t*)&_binary_donk_nes_start)
 //#define NSF_ROM_SIZE  ((unsigned int)&_binary_donk_nes_size)
+#if 1
+
+extern const uint8_t _binary_donk_nes_start;
+extern const unsigned int _binary_donk_nes_size;
+
+#define NSF_ROM   ((uint8_t*)&_binary_donk_nes_start)
+#define NSF_ROM_SIZE  ((unsigned int)&_binary_donk_nes_size)
+
+Cartridge nes_cart(NSF_ROM, NSF_ROM_SIZE, false);
+#else
+extern const uint8_t _binary_goal3_nsf_start;
+extern const unsigned int _binary_goal3_nsf_size;
 
 #define NSF_ROM   ((uint8_t*)&_binary_goal3_nsf_start)
 #define NSF_ROM_SIZE  ((unsigned int)&_binary_goal3_nsf_size)
+Cartridge nes_cart(NSF_ROM, NSF_ROM_SIZE, true);
+#endif
 
 class AudioOutput : public IDmaRingBufferReadPos
 {
@@ -712,7 +724,7 @@ extern "C" void task_nes_emu_main(void *argument)
     audio_output.playBuffer(bus.cpu.apu.audio_buffer, AUDIO_BUFFER_SIZE);
     while (1)
     {
-        __disable_irq();
+        //__disable_irq();
         uint32_t time_start = DWT->CYCCNT;
         uint32_t elapsed;
         uint32_t frame __attribute__((used))= 0;
@@ -729,9 +741,9 @@ extern "C" void task_nes_emu_main(void *argument)
         
         //DWT_Stats::Print();
         elapsed = DWT->CYCCNT - time_start;
-        __enable_irq();
+        //__enable_irq();
         uint32_t cycles_per_frame = elapsed / frame;
-        uint32_t fps = SystemCoreClock / cycles_per_frame;
+        uint32_t fps = (SystemCoreClock + cycles_per_frame / 2) / cycles_per_frame;
         uint32_t cpu_cycles_per_sec = fps * 299280; // NTSC CPU cycles per frame
         uint32_t apu_cycles_per_sec = fps * 299280 / 2;
         uint32_t apu_instructions_per_sec = bus.cpu.total_instructions * 1000 / elapsed;
@@ -926,8 +938,6 @@ void apuInit()
 
 const uint32_t NSF_HEADER_SIZE = 0x80;
 
-Cartridge nes_cart(NSF_ROM, NSF_ROM_SIZE, true);
-
 extern "C" void init()
 {
 #if 1
@@ -958,14 +968,16 @@ extern "C" void init()
     Keypad_4x1 keypad(&keypad_key1, &keypad_key2, &keypad_key3, &keypad_key4);
     keypad.init();*/
 
-    /*ST7735_Init();
+    ST7735_Init();
     ST7735_FillScreen(ST7735_GREEN);
     St7735_Vt100_t lcd_vt100_terminal;
     lcd_vt100_terminal.init(Font_7x10);
     FILE *flcd = lcd_vt100_terminal.fopen();
     init_shell(flcd);
-    fprintf(flcd, "Hello from %s (FreeRTOS)!" ENDL, MCU_NAME_STR);*/
-    
+    fprintf(flcd, "Hello from %s (FreeRTOS)!" ENDL, MCU_NAME_STR);
+    ST7735_SetAddressWindow(0, 0, 127, 159);
+    HAL_GPIO_WritePin(ST7735_DC_GPIO_Port, ST7735_DC_Pin, GPIO_PIN_SET);
+
     bus.cpu.apu.connectDma(&audio_output);
     bus.cpu.connectBus(&bus);
     bus.insertCartridge(&nes_cart);
@@ -973,20 +985,25 @@ extern "C" void init()
     DWT_Stats::Init();
     DWT_Stats::Start();
 
+    /*hi2s2.hdmatx->Init.Mode = DMA_NORMAL;
+    HAL_DMA_Init(hi2s2.hdmatx);
+    HAL_I2S_Transmit_DMA(&hi2s2, (uint16_t*)buffer, size);
+    HAL_SPI_Transmit_DMA(&hspi3, (uint8_t*)buffer, size);*/
+
     /*osThreadAttr_t defaultTask_attributes = { };
     defaultTask_attributes.name = "task_user_input";
     defaultTask_attributes.stack_size = 256 * 4;
     defaultTask_attributes.priority = (osPriority_t) osPriorityNormal;
     task_handle_user_input = osThreadNew(task_user_input, NULL, &defaultTask_attributes);*/
-
-    /*osThreadAttr_t nesEmuMainTask_attributes = { };
+#if 1
+    osThreadAttr_t nesEmuMainTask_attributes = { };
     nesEmuMainTask_attributes.name = "task_nes_emu_main";
     nesEmuMainTask_attributes.stack_size = 256 * 4;
     nesEmuMainTask_attributes.priority = (osPriority_t) osPriorityNormal;
 
-    task_handle_nes_emu_main = osThreadNew(task_nes_emu_main, NULL, &nesEmuMainTask_attributes);*/
+    task_handle_nes_emu_main = osThreadNew(task_nes_emu_main, NULL, &nesEmuMainTask_attributes);
 
-#if 1
+#else
     uint32_t loadAddr = ((uint16_t*)NSF_ROM)[4];
     uint32_t initFuncAddr = ((uint16_t*)NSF_ROM)[5];
     uint32_t playFuncAddr = ((uint16_t*)NSF_ROM)[6];

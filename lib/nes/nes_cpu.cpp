@@ -114,11 +114,11 @@ void Cpu6502::clock(int i)
         additional_cycle1 = 0;
         additional_cycle2 = 0;
 
-        if (SP == 0x00 || SP == 0xFF)
+        /*if (SP == 0x00 || SP == 0xFF)
         {
             // Prevent stack overflow crash on BRK when SP is 0x00
             return;
-        }
+        }*/
 
         //total_instructions++;
         /*if (en_bkpt && PC - 1u == bkpt)

@@ -7,8 +7,8 @@
 
 #define BUFFER_SIZE 256 + 8 + 8
 #define SCANLINE_SIZE 256
-//#define SCANLINES_PER_BUFFER 8
 #define SCANLINES_PER_BUFFER 1
+//#define SCANLINES_PER_BUFFER 1
 #define TILES_PER_SCANLINE 32
 #define PIXELS_PER_TILE 8
 
@@ -34,6 +34,7 @@ public:
     void connectBus(Bus* n) { bus = n; }
     void connectCartridge(Cartridge* cartridge);
     void setMirror(Cartridge::MIRROR mirror);
+    void incrementY();
     Cartridge::MIRROR getMirror();
 
     //void dumpState(File& state);
@@ -45,11 +46,9 @@ private:
     void renderBackground();
     void renderSprites(uint16_t scanline);
     void transferScroll(uint16_t scanline);
-    void incrementY();
     void finishScanline(uint16_t scanline);
     uint16_t scanline_buffer[BUFFER_SIZE];
     uint8_t scanline_metadata[BUFFER_SIZE];
-    static uint16_t display_buffer[SCANLINE_SIZE * SCANLINES_PER_BUFFER];
     uint8_t nametable[2048];
     uint8_t* ptr_nametable[4];
     uint8_t palette_table[32];
@@ -166,9 +165,10 @@ private:
 
     uint8_t sprite_count = 0;
 public:
+    static uint16_t display_buffer[2][SCANLINE_SIZE * SCANLINES_PER_BUFFER];
     uint8_t* ptr_sprite = (uint8_t*)sprite;
-    uint16_t* ptr_buffer = scanline_buffer;
-    static constexpr uint16_t* ptr_display = display_buffer;
+    uint16_t* ptr_buffer = display_buffer[0];
+    uint16_t* ptr_display = display_buffer[1];
 };
 
 #endif

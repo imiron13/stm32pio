@@ -137,6 +137,7 @@ public:
     void OAM_Write(uint8_t addr, uint8_t data);
     void IRQ();
     void NMI();
+    void renderImage(uint16_t scanline);
 
 private:
     uint8_t RAM[2048];

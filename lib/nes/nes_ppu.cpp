@@ -8,7 +8,7 @@ using namespace std;
 #define DRAM_ATTR
 #define IRAM_ATTR
 
-DMA_ATTR uint16_t Ppu2C02::display_buffer[SCANLINE_SIZE * SCANLINES_PER_BUFFER];
+DMA_ATTR uint16_t Ppu2C02::display_buffer[2][SCANLINE_SIZE * SCANLINES_PER_BUFFER];
 
 // NTSC Palette in RGB565
 static constexpr DRAM_ATTR uint16_t nes_palette[64] = 
@@ -171,11 +171,11 @@ IRAM_ATTR void Ppu2C02::clearVBlank()
 
 IRAM_ATTR void Ppu2C02::renderScanline(uint16_t scanline)
 {
-    /*transferScroll(scanline);
+    transferScroll(scanline);
     renderBackground();
     renderSprites(scanline);
     incrementY();
-    finishScanline(scanline);*/
+    finishScanline(scanline);
 }
 
 inline void Ppu2C02::transferScroll(uint16_t scanline)
@@ -184,7 +184,7 @@ inline void Ppu2C02::transferScroll(uint16_t scanline)
     v.reg = (scanline == 0) ? t.reg : v.reg = (v.reg & ~0x041F) | (t.reg & 0x041F);
 }
 
-inline void Ppu2C02::incrementY()
+/*inline*/ void Ppu2C02::incrementY()
 {
     if (!(mask.render_background || mask.render_sprite)) return;
 
@@ -419,6 +419,7 @@ inline void Ppu2C02::renderSprites(uint16_t scanline)
 
 void Ppu2C02::fakeSpriteHit(uint16_t scanline)
 {
+#if 1
     if (!mask.render_sprite || status.sprite_zero_hit) return;
 
     uint8_t sprite_size;
@@ -493,15 +494,16 @@ void Ppu2C02::fakeSpriteHit(uint16_t scanline)
         // }
     }
     cart->ppuScanline();
+#endif
 }
 
 inline void Ppu2C02::finishScanline(uint16_t scanline)
 {
-    memcpy(ptr_display + (scanline_counter * SCANLINE_SIZE), ptr_buffer, SCANLINE_SIZE * sizeof(uint16_t));
+    //memcpy(ptr_display + (scanline_counter * SCANLINE_SIZE), ptr_buffer, SCANLINE_SIZE * sizeof(uint16_t));
     scanline_counter++;
     if (scanline_counter >= SCANLINES_PER_BUFFER) 
     { 
-        //bus->renderImage(scanline - (SCANLINES_PER_BUFFER - 1));
+        bus->renderImage(scanline - (SCANLINES_PER_BUFFER - 1));
         scanline_counter = 0;
     }
 }

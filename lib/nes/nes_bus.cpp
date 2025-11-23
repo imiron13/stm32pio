@@ -4,9 +4,14 @@
 #include "intrinsics.h"
 #include <cstdint>
 #include <cstring>
+
+#include <hal_wrapper_stm32.h>
+#include "st7735.h"
+
 using namespace std;
 
 #define IRAM_ATTR
+#define FRAMESKIP
 
 Bus::Bus()
 {
@@ -33,7 +38,7 @@ IRAM_ATTR void Bus::cpuWriteNonRam(uint16_t addr, uint8_t data)
     }
     else if (addr == 0x4014)
     {
-        //cpu.OAM_DMA(data);
+        cpu.OAM_DMA(data);
     }
     else if (addr == 0x4016)
     {
@@ -77,6 +82,7 @@ void Bus::cpuReadBlock(uint16_t addr, uint32_t size, uint8_t* data)
 
 IRAM_ATTR void Bus::clock()
 {
+    //ST7735_SetAddressWindow(0, 0, 127, 159);
     // 1 frame == 341 dots * 261 scanlines
     // Visible scanlines 0-239
     
@@ -103,10 +109,12 @@ IRAM_ATTR void Bus::clock()
         cpu.clock(114);
 
         #ifndef FRAMESKIP
-            ppu.renderScanline(ppu_scanline + 2);
+            //ppu.renderScanline(ppu_scanline + 2);
+            ppu.fakeSpriteHit(ppu_scanline + 2); 
+            ppu.incrementY();
         #else
-            if (frame_latch) { ppu.renderScanline(ppu_scanline + 2); }
-            else { ppu.fakeSpriteHit(ppu_scanline + 2); }
+            if (frame_latch) { ppu.fakeSpriteHit(ppu_scanline + 2); ppu.incrementY(); }
+            else { ppu.fakeSpriteHit(ppu_scanline + 2);  }
         #endif
         cpu.clock(114);
         //cpu.clock(30);
@@ -150,16 +158,26 @@ void Bus::connectScreen(TFT_eSPI* screen)
 {
     ptr_screen = screen;
 }
+#endif
 
 IRAM_ATTR void Bus::renderImage(uint16_t scanline)
 {
-    #ifndef TFT_PARALLEL
+    /*#ifndef TFT_PARALLEL
         ptr_screen->pushImageDMA(32, scanline, 256, SCANLINES_PER_BUFFER, ppu.ptr_display);
     #else
         ptr_screen->pushImage(32, scanline, 256, SCANLINES_PER_BUFFER, ppu.ptr_display);
-    #endif
+    #endif*/
+    //if (scanline >= 160) return;
+    //ST7735_WriteData((uint8_t*)ppu.ptr_display, 256 * SCANLINES_PER_BUFFER * 2);
+    HAL_StatusTypeDef st;
+    do {
+        st = HAL_SPI_Transmit_DMA(&hspi1, reinterpret_cast<uint8_t*>(ppu.ptr_buffer), 128 /*256*/ * SCANLINES_PER_BUFFER * 2);
+    } while (st != HAL_OK);
+    auto temp = ppu.ptr_display;
+    ppu.ptr_display = ppu.ptr_buffer;
+    ppu.ptr_buffer = temp;
 } 
-#endif
+
 
 void Bus::insertCartridge(Cartridge* cartridge)
 {
