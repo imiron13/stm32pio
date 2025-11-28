@@ -5,7 +5,7 @@
 #include "nes_cartridge.h"
 #include "intrinsics.h"
 
-#define BUFFER_SIZE 256 + 8 + 8
+#define BUFFER_SIZE (256 + 8 + 8)
 #define SCANLINE_SIZE 256
 #define SCANLINES_PER_BUFFER 1
 //#define SCANLINES_PER_BUFFER 1
@@ -165,10 +165,10 @@ private:
 
     uint8_t sprite_count = 0;
 public:
-    static uint16_t display_buffer[2][SCANLINE_SIZE * SCANLINES_PER_BUFFER];
+    static uint16_t display_buffer[2][BUFFER_SIZE * SCANLINES_PER_BUFFER];
     uint8_t* ptr_sprite = (uint8_t*)sprite;
     uint16_t* ptr_buffer = display_buffer[0];
-    uint16_t* ptr_display = display_buffer[1];
+    uint32_t write_buf_idx = 0;
 };
 
 #endif

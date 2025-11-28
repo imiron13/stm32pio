@@ -51,8 +51,8 @@ using namespace std;
 
 #define EN_SD_CARD_READ_WRITE_SHELL_CMDS                    (1 && (EN_SD_CARD == 1))
 #define EN_FATFS_SHELL_CMDS                                 (1 && (EN_FATFS == 1))
-#define EN_AUDIO_SHELL_CMDS                                 (1)
-#define EN_TETRIS                                           (1)
+#define EN_AUDIO_SHELL_CMDS                                 (0)
+#define EN_TETRIS                                           (0)
 
 extern UART_HandleTypeDef huart1;
 extern I2S_HandleTypeDef hi2s2;
@@ -67,7 +67,7 @@ Shell_t shell;
 
 #define PI 3.14159265358979323846
 #define TAU (2.0 * PI)
-
+#endif
 //extern const uint8_t _binary_Unchained_vgm_start;
 //extern const unsigned int _binary_Unchained_vgm_size;
 
@@ -91,11 +91,37 @@ Shell_t shell;
 //#define NSF_ROM_SIZE  ((unsigned int)&_binary_donk_nes_size)
 #if 1
 
-extern const uint8_t _binary_donk_nes_start;
+/*extern const uint8_t _binary_donk_nes_start;
 extern const unsigned int _binary_donk_nes_size;
 
 #define NSF_ROM   ((uint8_t*)&_binary_donk_nes_start)
-#define NSF_ROM_SIZE  ((unsigned int)&_binary_donk_nes_size)
+#define NSF_ROM_SIZE  ((unsigned int)&_binary_donk_nes_size)*/
+
+/*extern const uint8_t _binary_baloon_nes_start;
+extern const unsigned int _binary_baloon_nes_size;
+
+#define NSF_ROM   ((uint8_t*)&_binary_baloon_nes_start)
+#define NSF_ROM_SIZE  ((unsigned int)&_binary_baloon_nes_size)*/
+
+
+/*extern const uint8_t _binary_loonar_nes_start;
+extern const unsigned int _binary_loonar_nes_size;
+
+#define NSF_ROM   ((uint8_t*)&_binary_loonar_nes_start)
+#define NSF_ROM_SIZE  ((unsigned int)&_binary_loonar_nes_size)*/
+
+/*extern const uint8_t _binary_smario_nes_start;
+extern const unsigned int _binary_smario_nes_size;
+
+#define NSF_ROM   ((uint8_t*)&_binary_smario_nes_start)
+#define NSF_ROM_SIZE  ((unsigned int)&_binary_smario_nes_size)*/
+
+extern const uint8_t _binary_tanks_nes_start;
+extern const unsigned int _binary_tanks_nes_size;
+
+#define NSF_ROM   ((uint8_t*)&_binary_tanks_nes_start)
+#define NSF_ROM_SIZE  ((unsigned int)&_binary_tanks_nes_size)
+
 
 Cartridge nes_cart(NSF_ROM, NSF_ROM_SIZE, false);
 #else
@@ -143,6 +169,7 @@ public:
         return AUDIO_BUFFER_SIZE - __HAL_DMA_GET_COUNTER(hi2s2.hdmatx);
     };
 };
+
 
 VgmPlayer vgm_player;
 //Apu2A03 apu;
@@ -290,8 +317,6 @@ bool shell_cmd_test_dac(FILE *f, ShellCmd_t *cmd, const char *s) {
 #define DAC_BUF_SIZE            (DAC_BUF_NUM_SAMPLES * sizeof(int16_t))
 #endif
 
-#endif
-
 bool shell_cmd_clear_screen(FILE *f, ShellCmd_t *cmd, const char *s)
 {
     fprintf(f, BG_BLACK FG_BRIGHT_WHITE VT100_CLEAR_SCREEN VT100_CURSOR_HOME);
@@ -312,6 +337,7 @@ bool shell_cmd_led(FILE *f, ShellCmd_t *cmd, const char *s)
     return true;
 }
 
+#if 0
 bool shell_heap_stat(FILE *f, ShellCmd_t *cmd, const char *s)
 {
     struct mallinfo heap_info = mallinfo();
@@ -327,6 +353,8 @@ bool shell_heap_stat(FILE *f, ShellCmd_t *cmd, const char *s)
     fprintf(f, "keepcost=%d" ENDL, heap_info.keepcost);  /* Top-most, releasable space (bytes) */
     return true;
 }
+#endif
+
 #if 0
 bool shell_emul_eeprom_format(FILE *f, ShellCmd_t *cmd, const char *s)
 {
@@ -700,8 +728,8 @@ void init_shell(FILE *device=stdout)
 {
     shell.add_command(ShellCmd_t("cls", "Clear screen", shell_cmd_clear_screen));
     shell.add_command(ShellCmd_t("led", "LED control", shell_cmd_led));
-    shell.add_command(ShellCmd_t("heap", "", shell_heap_stat));
-    /*shell.add_command(ShellCmd_t("eeformat", "", shell_emul_eeprom_format));
+    /*shell.add_command(ShellCmd_t("heap", "", shell_heap_stat));
+    shell.add_command(ShellCmd_t("eeformat", "", shell_emul_eeprom_format));
     shell.add_command(ShellCmd_t("eerd", "", shell_emul_eeprom_read));
     shell.add_command(ShellCmd_t("eewr", "", shell_emul_eeprom_write));*/
     //shell.add_command(ShellCmd_t("pcnt", "", shell_pulse_counter_stat));
@@ -728,7 +756,7 @@ extern "C" void task_nes_emu_main(void *argument)
         uint32_t time_start = DWT->CYCCNT;
         uint32_t elapsed;
         uint32_t frame __attribute__((used))= 0;
-        for (frame = 0; frame < 100; frame++)
+        //for (frame = 0; frame < 100; frame++)
         {
             bus.clock();
 
@@ -738,7 +766,7 @@ extern "C" void task_nes_emu_main(void *argument)
             bus.controller |= (button1.is_pressed() ? Bus::CONTROLLER::Start : 0x00);
             bus.controller |= (button2.is_pressed() ? Bus::CONTROLLER::A : 0x00);
         };
-        
+#if 0        
         //DWT_Stats::Print();
         elapsed = DWT->CYCCNT - time_start;
         //__enable_irq();
@@ -766,6 +794,7 @@ extern "C" void task_nes_emu_main(void *argument)
         printf("Cycles per frame: %lu" ENDL, (unsigned long)cycles_per_frame);
         //DWT_Stats::Reset();
         //osDelay(10);
+#endif
     }
 
 }
@@ -941,15 +970,15 @@ const uint32_t NSF_HEADER_SIZE = 0x80;
 extern "C" void init()
 {
 #if 1
-    MX_USB_DEVICE_Init();
+    //MX_USB_DEVICE_Init();
 
     FILE *fuart1 = uart_fopen(&huart1);
     stdout = fuart1;
 
-    FILE *fusb_vcom = usb_vcom_fopen();
+    /*FILE *fusb_vcom = usb_vcom_fopen();
     stdout = fusb_vcom;
 
-    HAL_Delay(2000);  // delay for USB reconnect
+    HAL_Delay(2000);*/  // delay for USB reconnect
 
     printf(BG_BLACK FG_BRIGHT_WHITE VT100_CLEAR_SCREEN VT100_CURSOR_HOME VT100_SHOW_CURSOR);
     printf(ENDL "Hello from %s (FreeRTOS)!" ENDL, MCU_NAME_STR);

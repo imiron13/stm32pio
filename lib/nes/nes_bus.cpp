@@ -171,11 +171,11 @@ IRAM_ATTR void Bus::renderImage(uint16_t scanline)
     //ST7735_WriteData((uint8_t*)ppu.ptr_display, 256 * SCANLINES_PER_BUFFER * 2);
     HAL_StatusTypeDef st;
     do {
-        st = HAL_SPI_Transmit_DMA(&hspi1, reinterpret_cast<uint8_t*>(ppu.ptr_buffer), 128 /*256*/ * SCANLINES_PER_BUFFER * 2);
+        st = HAL_SPI_Transmit_DMA(&hspi1, reinterpret_cast<uint8_t*>(ppu.display_buffer[ppu.write_buf_idx] /*ppu.ptr_buffer*/), 128 /*256*/ * SCANLINES_PER_BUFFER * 2);
     } while (st != HAL_OK);
-    auto temp = ppu.ptr_display;
-    ppu.ptr_display = ppu.ptr_buffer;
-    ppu.ptr_buffer = temp;
+
+    ppu.write_buf_idx ^= 1;
+    ppu.ptr_buffer = ppu.display_buffer[ppu.write_buf_idx];
 } 
 
 

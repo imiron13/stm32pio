@@ -8,19 +8,26 @@ using namespace std;
 #define DRAM_ATTR
 #define IRAM_ATTR
 
-DMA_ATTR uint16_t Ppu2C02::display_buffer[2][SCANLINE_SIZE * SCANLINES_PER_BUFFER];
+DMA_ATTR uint16_t Ppu2C02::display_buffer[2][BUFFER_SIZE * SCANLINES_PER_BUFFER];
 
-// NTSC Palette in RGB565
+static constexpr inline uint16_t swap2(uint16_t c) { return (uint16_t)( ((c & 0x001F) << 11) | (c & 0x07E0) | ((c >> 11) & 0x001F) ); }
+static constexpr inline uint16_t swap_rb(uint16_t c) { return ((c & 0xFF) << 8) | (c >> 8); }
+//static constexpr inline uint16_t swap_rb(uint16_t c) { return c; }
+//static constexpr inline uint16_t swap_rb(uint16_t c) { return swap2(c); }
+//static constexpr inline uint16_t swap_rb(uint16_t c) { return ((swap2(c) & 0xFF) << 8) | (swap2(c) >> 8); }
+//static constexpr inline uint16_t swap_rb(uint16_t c) { return swap2((((c) & 0xFF) << 8) | ((c) >> 8)); }
+
+// NTSC Palette in RGB565 (R and B channels swapped)
 static constexpr DRAM_ATTR uint16_t nes_palette[64] = 
 {
-    0x528A, 0x00CA, 0x086C, 0x202C, 0x3009, 0x4024, 0x3840, 0x3080,
-    0x1900, 0x0940, 0x0160, 0x0161, 0x0125, 0x0000, 0x0000, 0x0000,
-    0xA514, 0x1A53, 0x39B7, 0x5957, 0x7112, 0x810B, 0x8164, 0x69E0,
-    0x5280, 0x3300, 0x1B40, 0x0B45, 0x12ED, 0x0000, 0x0000, 0x0000,
-    0xFFFF, 0x6CFF, 0x8C3F, 0xABBF, 0xCB7E, 0xE396, 0xDBEE, 0xCC87,
-    0xA524, 0x85C5, 0x6628, 0x560F, 0x5598, 0x39E7, 0x0000, 0x0000,
-    0xFFFF, 0xBEBF, 0xCE7F, 0xDE3F, 0xEE1F, 0xF61B, 0xF638, 0xEE95,
-    0xDED3, 0xCF13, 0xBF35, 0xB738, 0xB6FC, 0xAD55, 0x0000, 0x0000,
+    swap_rb(0x528A), swap_rb(0x00CA), swap_rb(0x086C), swap_rb(0x202C), swap_rb(0x3009), swap_rb(0x4024), swap_rb(0x3840), swap_rb(0x3080),
+    swap_rb(0x1900), swap_rb(0x0940), swap_rb(0x0160), swap_rb(0x0161), swap_rb(0x0125), swap_rb(0x0000), swap_rb(0x0000), swap_rb(0x0000),
+    swap_rb(0xA514), swap_rb(0x1A53), swap_rb(0x39B7), swap_rb(0x5957), swap_rb(0x7112), swap_rb(0x810B), swap_rb(0x8164), swap_rb(0x69E0),
+    swap_rb(0x5280), swap_rb(0x3300), swap_rb(0x1B40), swap_rb(0x0B45), swap_rb(0x12ED), swap_rb(0x0000), swap_rb(0x0000), swap_rb(0x0000),
+    swap_rb(0xFFFF), swap_rb(0x6CFF), swap_rb(0x8C3F), swap_rb(0xABBF), swap_rb(0xCB7E), swap_rb(0xE396), swap_rb(0xDBEE), swap_rb(0xCC87),
+    swap_rb(0xA524), swap_rb(0x85C5), swap_rb(0x6628), swap_rb(0x560F), swap_rb(0x5598), swap_rb(0x39E7), swap_rb(0x0000), swap_rb(0x0000),
+    swap_rb(0xFFFF), swap_rb(0xBEBF), swap_rb(0xCE7F), swap_rb(0xDE3F), swap_rb(0xEE1F), swap_rb(0xF61B), swap_rb(0xF638), swap_rb(0xEE95),
+    swap_rb(0xDED3), swap_rb(0xCF13), swap_rb(0xBF35), swap_rb(0xB738), swap_rb(0xB6FC), swap_rb(0xAD55), swap_rb(0x0000), swap_rb(0x0000),
 };
 
 
@@ -209,20 +216,20 @@ inline void Ppu2C02::renderBackground()
     // Show transparency pixel if not rendering background
     if (!mask.render_background)
     {
-        uint16_t bg_color = nes_palette[palette_table[0]];
+        uint16_t bg_color = nes_palette[palette_table[0] % 64];
         uint32_t color32 = ((uint32_t)bg_color << 16) | bg_color;
-        uint32_t* buffer = (uint32_t*)scanline_buffer;
+        uint32_t* buffer = (uint32_t*)/*scanline_buffer*/display_buffer[write_buf_idx];
         for (int i = 0, size = (BUFFER_SIZE >> 1); i < size; i++) 
             buffer[i] = color32;
 
         memset(scanline_metadata, 0x80, BUFFER_SIZE);
-        ptr_buffer = scanline_buffer + x;
+        ptr_buffer = /*scanline_buffer*/display_buffer[write_buf_idx] + x;
         ptr_scanline_meta = scanline_metadata + x;
         return;
     }
 
-    uint16_t bg_color = nes_palette[palette_table[0]];
-    ptr_buffer = scanline_buffer;
+    uint16_t bg_color = nes_palette[palette_table[0] % 64];
+    ptr_buffer = /*scanline_buffer*/display_buffer[write_buf_idx];
     ptr_scanline_meta = scanline_metadata;
     x_tile = v.coarse_x;
     y_tile = v.coarse_y;
@@ -281,7 +288,7 @@ inline void Ppu2C02::renderBackground()
             attribute = ((attribute_byte >> attribute_shift) & 0x03) << 2;
         }
     }
-    ptr_buffer = scanline_buffer + x;
+    ptr_buffer = /*scanline_buffer*/display_buffer[write_buf_idx] + x;
 }
 
 inline void Ppu2C02::renderSprites(uint16_t scanline)
@@ -295,7 +302,7 @@ inline void Ppu2C02::renderSprites(uint16_t scanline)
     uint8_t sprite_size;
     uint8_t sprite_count = 0;
 
-    uint16_t bg_color = nes_palette[palette_table[0]];
+    uint16_t bg_color = nes_palette[palette_table[0] % 64];
     uint16_t tile_palette[4];
     tile_palette[0] = bg_color;
 
@@ -304,7 +311,7 @@ inline void Ppu2C02::renderSprites(uint16_t scanline)
 
     sprite_size = (control.sprite_size ? 16 : 8);
 
-    uint16_t* buffer_offset = scanline_buffer + x;
+    uint16_t* buffer_offset = /*scanline_buffer*/display_buffer[write_buf_idx] + x;
     uint8_t* metadata_offset = scanline_metadata + x;
     for (int i = 0; i < 64; i++, ptr_sprite_OAM++)
     {
