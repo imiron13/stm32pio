@@ -8,10 +8,13 @@
 #include <hal_wrapper_stm32.h>
 #include "st7735.h"
 
+#include "stm32g4xx_ll_dma.h"
+#include "stm32g4xx_ll_spi.h"
+
 using namespace std;
 
 #define IRAM_ATTR
-#define FRAMESKIP
+//#define FRAMESKIP
 
 Bus::Bus()
 {
@@ -80,8 +83,37 @@ void Bus::cpuReadBlock(uint16_t addr, uint32_t size, uint8_t* data)
     }
 }
 
+void spi_dma_init(void *data, size_t size)
+{
+    // DMAMUX → SPI1_TX
+    LL_SPI_SetDataWidth(SPI1, LL_SPI_DATAWIDTH_16BIT);
+    LL_DMAMUX_SetRequestID(DMAMUX1, LL_DMAMUX_CHANNEL_1, LL_DMAMUX_REQ_SPI1_TX);
+
+    // DMA channel config (never changed)
+    LL_DMA_SetPeriphAddress(DMA1, LL_DMA_CHANNEL_2, (uint32_t)&SPI1->DR);
+    LL_DMA_SetMemoryAddress(DMA1, LL_DMA_CHANNEL_2, (uint32_t)data);
+    LL_DMA_SetDataLength(DMA1, LL_DMA_CHANNEL_2, size/2);
+
+    LL_DMA_SetDataTransferDirection(DMA1, LL_DMA_CHANNEL_2, LL_DMA_DIRECTION_MEMORY_TO_PERIPH);
+    LL_DMA_SetMemoryIncMode(DMA1, LL_DMA_CHANNEL_2, LL_DMA_MEMORY_INCREMENT);
+    LL_DMA_SetPeriphIncMode(DMA1, LL_DMA_CHANNEL_2, LL_DMA_PERIPH_NOINCREMENT);
+    LL_DMA_SetMemorySize(DMA1, LL_DMA_CHANNEL_2, LL_DMA_MDATAALIGN_HALFWORD);
+    LL_DMA_SetPeriphSize(DMA1, LL_DMA_CHANNEL_2, LL_DMA_PDATAALIGN_HALFWORD);
+    LL_DMA_SetChannelPriorityLevel(DMA1, LL_DMA_CHANNEL_2, LL_DMA_PRIORITY_HIGH);
+
+    // No interrupts
+    LL_DMA_DisableIT_TC(DMA1, LL_DMA_CHANNEL_2);
+    LL_DMA_DisableIT_TE(DMA1, LL_DMA_CHANNEL_2);
+
+    // SPI config done elsewhere
+    LL_SPI_Enable(SPI1);
+    LL_SPI_EnableDMAReq_TX(SPI1);
+}
+
 IRAM_ATTR void Bus::clock()
 {
+    spi_dma_init(ppu.display_buffer[ppu.write_buf_idx], 256 * SCANLINES_PER_BUFFER * 2);
+    
     //ST7735_SetAddressWindow(0, 0, 127, 159);
     // 1 frame == 341 dots * 261 scanlines
     // Visible scanlines 0-239
@@ -109,16 +141,15 @@ IRAM_ATTR void Bus::clock()
         cpu.clock(114);
 
         #ifndef FRAMESKIP
-            //ppu.renderScanline(ppu_scanline + 2);
-            ppu.fakeSpriteHit(ppu_scanline + 2); 
-            ppu.incrementY();
+            ppu.renderScanline(ppu_scanline + 2);
+            //ppu.fakeSpriteHit(ppu_scanline + 2); 
+            //ppu.incrementY();
         #else
-            if (frame_latch) { ppu.fakeSpriteHit(ppu_scanline + 2); ppu.incrementY(); }
+            if (frame_latch) { ppu.renderScanline(ppu_scanline + 2); }
             else { ppu.fakeSpriteHit(ppu_scanline + 2);  }
         #endif
         cpu.clock(114);
-        //cpu.clock(30);
-        cpu.apu.clock(341/2);
+        //cpu.apu.clock(338/2);
     }
 
     // Setup for the next frame
@@ -132,7 +163,7 @@ IRAM_ATTR void Bus::clock()
 
     ppu.clearVBlank();
     cpu.clock(114);
-    cpu.apu.clock((113+2501+114)/2);
+    //cpu.apu.clock((113+2501+114)/2);
 
     frame_latch = !frame_latch;
 }
@@ -160,6 +191,31 @@ void Bus::connectScreen(TFT_eSPI* screen)
 }
 #endif
 
+bool dma_busy = 0;
+
+static inline void spi_dma_start(void *data)
+{
+    LL_DMA_SetMemoryAddress(DMA1, LL_DMA_CHANNEL_2, (uint32_t)data);
+    LL_DMA_SetDataLength(DMA1, LL_DMA_CHANNEL_2, /*128*/ 256 * SCANLINES_PER_BUFFER * 2/2);
+    LL_DMA_EnableChannel(DMA1, LL_DMA_CHANNEL_2);
+    dma_busy = 1;
+}
+
+static inline void spi_dma_wait_ready(void)
+{
+    if (!dma_busy) return;
+    // DMA transfer complete
+    while (!LL_DMA_IsActiveFlag_TC2(DMA1)) {}
+    LL_DMA_ClearFlag_TC2(DMA1);
+
+    // Must wait until SPI is fully idle
+    while (LL_SPI_IsActiveFlag_BSY(SPI1)) {}
+
+    // Required: disable channel so next CNDTR reload takes effect
+    LL_DMA_DisableChannel(DMA1, LL_DMA_CHANNEL_2);
+    dma_busy = 0;
+}
+
 IRAM_ATTR void Bus::renderImage(uint16_t scanline)
 {
     /*#ifndef TFT_PARALLEL
@@ -169,11 +225,14 @@ IRAM_ATTR void Bus::renderImage(uint16_t scanline)
     #endif*/
     //if (scanline >= 160) return;
     //ST7735_WriteData((uint8_t*)ppu.ptr_display, 256 * SCANLINES_PER_BUFFER * 2);
+    spi_dma_wait_ready();
+    spi_dma_start(ppu.display_buffer[ppu.write_buf_idx] + ppu.x / 2);
+#if 0
     HAL_StatusTypeDef st;
     do {
         st = HAL_SPI_Transmit_DMA(&hspi1, reinterpret_cast<uint8_t*>(ppu.display_buffer[ppu.write_buf_idx] /*ppu.ptr_buffer*/), 128 /*256*/ * SCANLINES_PER_BUFFER * 2);
     } while (st != HAL_OK);
-
+#endif
     ppu.write_buf_idx ^= 1;
     ppu.ptr_buffer = ppu.display_buffer[ppu.write_buf_idx];
 } 

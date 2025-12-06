@@ -1,0 +1,45 @@
+{
+  "build": {
+    "cpu": "cortex-m4",
+    "f_cpu": "170000000L",
+    "mcu": "stm32g474cet6",
+    "product_line": "STM32G474CE",
+    "series": "stm32g4",
+    "variant": "STM32G4xx",
+    "ldscript": "STM32G474CE_FLASH.ld",
+    "extra_flags": [
+      "-DSTM32G474xx",
+      "-DSTM32G4",
+      "-DHAL_RCC_MODULE_ENABLED",
+      "-DHAL_GPIO_MODULE_ENABLED",
+      "-DHAL_DMA_MODULE_ENABLED",
+      "-DHAL_ADC_MODULE_ENABLED"
+    ]
+  },
+
+  "frameworks": ["cmsis", "stm32cube"],
+  "name": "STM32G474CE (Custom)",
+  "upload": {
+    "protocol": "stlink",
+    "maximum_ram_size": 131072,
+    "maximum_size": 524288
+  },
+
+  "debug": {
+    "tools": {
+      "stlink": {
+        "onboard": true,
+        "default": true,
+        "server": "openocd",
+        "server_args": [
+          "-f", "interface/stlink.cfg",
+          "-f", "target/stm32g4x.cfg"
+        ]
+      }
+    },
+    "openocd_target": "stm32g4x"
+  },
+  "url": "https://www.st.com/en/microcontrollers-microprocessors/stm32g474.html",
+  "vendor": "ST"
+}
+

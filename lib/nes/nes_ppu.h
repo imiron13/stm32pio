@@ -42,8 +42,7 @@ public:
 private:
     Cartridge* cart = nullptr;
     Bus* bus = nullptr;
-
-    void renderBackground();
+    void renderBackground() fast_code_section;
     void renderSprites(uint16_t scanline);
     void transferScroll(uint16_t scanline);
     void finishScanline(uint16_t scanline);
@@ -142,7 +141,6 @@ private:
     OAM sprite[64];
     internal_register v;
     internal_register t;
-    uint8_t x;
     uint8_t w;
     uint8_t PPUDATA_buffer = 0x00;
 
@@ -165,6 +163,7 @@ private:
 
     uint8_t sprite_count = 0;
 public:
+    uint8_t x;
     static uint16_t display_buffer[2][BUFFER_SIZE * SCANLINES_PER_BUFFER];
     uint8_t* ptr_sprite = (uint8_t*)sprite;
     uint16_t* ptr_buffer = display_buffer[0];

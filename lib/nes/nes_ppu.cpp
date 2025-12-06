@@ -11,8 +11,8 @@ using namespace std;
 DMA_ATTR uint16_t Ppu2C02::display_buffer[2][BUFFER_SIZE * SCANLINES_PER_BUFFER];
 
 static constexpr inline uint16_t swap2(uint16_t c) { return (uint16_t)( ((c & 0x001F) << 11) | (c & 0x07E0) | ((c >> 11) & 0x001F) ); }
-static constexpr inline uint16_t swap_rb(uint16_t c) { return ((c & 0xFF) << 8) | (c >> 8); }
-//static constexpr inline uint16_t swap_rb(uint16_t c) { return c; }
+//static constexpr inline uint16_t swap_rb(uint16_t c) { return ((c & 0xFF) << 8) | (c >> 8); }
+static constexpr inline uint16_t swap_rb(uint16_t c) { return c; }
 //static constexpr inline uint16_t swap_rb(uint16_t c) { return swap2(c); }
 //static constexpr inline uint16_t swap_rb(uint16_t c) { return ((swap2(c) & 0xFF) << 8) | (swap2(c) >> 8); }
 //static constexpr inline uint16_t swap_rb(uint16_t c) { return swap2((((c) & 0xFF) << 8) | ((c) >> 8)); }
@@ -178,8 +178,10 @@ IRAM_ATTR void Ppu2C02::clearVBlank()
 
 IRAM_ATTR void Ppu2C02::renderScanline(uint16_t scanline)
 {
+
     transferScroll(scanline);
     renderBackground();
+    //fakeSpriteHit(scanline);
     renderSprites(scanline);
     incrementY();
     finishScanline(scanline);
@@ -211,25 +213,52 @@ inline void Ppu2C02::transferScroll(uint16_t scanline)
     else v.coarse_y++;
 }
 
-inline void Ppu2C02::renderBackground()
-{   
+// Put these near the top of the .cpp for clarity (or inside the class as static)
+static constexpr uint8_t PIXEL_METADATA[4] = { 0x80, 0x00, 0x00, 0x00 };
+
+constexpr inline uint32_t get_meta(uint8_t p0)
+{
+    uint32_t result = 0;
+    for (uint32_t i = 0; i < 4; i++)
+    {
+        uint32_t b = (p0 >> 6) & 0x03;
+        
+        result |= (b == 0) ? 0x80ull << (i * 8) : 0;
+        p0 <<= 2;
+    }
+    return result;
+}
+
+#include <utility>
+#include <array>
+
+template <std::size_t... I>
+constexpr auto buildLUT(std::index_sequence<I...>) {
+    return std::array<uint32_t, sizeof...(I)>{ get_meta(static_cast<uint8_t>(I))... };
+}
+
+constexpr auto LUT = buildLUT(std::make_index_sequence<256>{});
+
+__attribute__((noinline, hot))
+void Ppu2C02::renderBackground()
+{
     // Show transparency pixel if not rendering background
     if (!mask.render_background)
     {
-        uint16_t bg_color = nes_palette[palette_table[0] % 64];
+        uint16_t bg_color = nes_palette[palette_table[0]];
         uint32_t color32 = ((uint32_t)bg_color << 16) | bg_color;
-        uint32_t* buffer = (uint32_t*)/*scanline_buffer*/display_buffer[write_buf_idx];
+        uint32_t* buffer = (uint32_t*)display_buffer[write_buf_idx]/*scanline_buffer*/;
         for (int i = 0, size = (BUFFER_SIZE >> 1); i < size; i++) 
             buffer[i] = color32;
 
         memset(scanline_metadata, 0x80, BUFFER_SIZE);
-        ptr_buffer = /*scanline_buffer*/display_buffer[write_buf_idx] + x;
+        ptr_buffer = display_buffer[write_buf_idx] /*scanline_buffer*/ + x;
         ptr_scanline_meta = scanline_metadata + x;
         return;
     }
 
-    uint16_t bg_color = nes_palette[palette_table[0] % 64];
-    ptr_buffer = /*scanline_buffer*/display_buffer[write_buf_idx];
+    uint16_t bg_color = nes_palette[palette_table[0]];
+    ptr_buffer = display_buffer[write_buf_idx] /*scanline_buffer*/;
     ptr_scanline_meta = scanline_metadata;
     x_tile = v.coarse_x;
     y_tile = v.coarse_y;
@@ -247,12 +276,39 @@ inline void Ppu2C02::renderBackground()
 
     static constexpr DRAM_ATTR uint8_t pixel_shift[8] = { 14, 6, 12, 4, 10, 2, 8, 0 }; // Shifts to get the bits of a pixel
     static constexpr DRAM_ATTR uint8_t pixel_metadata[4] = { 0x80, 0x00, 0x00, 0x00 };
-    for (int tile = 0; tile < 33; tile++)
-    {
-        tile_index = *ptr_tile++;
-        ptr_pattern_tile = cart->ppuReadPtr(offset + (tile_index << 4)); 
 
-        // draw to framebuffer
+    uint16_t tile_palette[4] = { bg_color };
+    tile_palette[1] = nes_palette[READ_PALETTE(attribute + 1)];
+    tile_palette[2] = nes_palette[READ_PALETTE(attribute + 2)];
+    tile_palette[3] = nes_palette[READ_PALETTE(attribute + 3)];
+
+    const uint8_t* chr_mem = cart->ppuReadPtr(offset);
+
+    for (int tile = 0; tile < 33; ++tile)
+    {
+        uint8_t tile_index = *ptr_tile++;
+
+        const uint8_t* ptr_pattern_tile = chr_mem + (uint32_t(tile_index) << 4);/*cart->ppuReadPtr(offset + (uint32_t(tile_index) << 4))*/;
+#if 0
+        // ptr_pattern_tile[0..7] = low bitplane rows; ptr_pattern_tile[8..15] = high bitplane rows
+        uint32_t p0 = ptr_pattern_tile[0];
+        uint32_t p1 = ptr_pattern_tile[8];
+        uint32_t p = ((p0 & 0xAA) >> 1) | ((p1 & 0xAA));
+
+
+        *(uint32_t*)ptr_scanline_meta = LUT[p];
+      
+        ptr_buffer[3] = tile_palette[p & 0x03];
+        p >>= 2;
+        ptr_buffer[2] = tile_palette[p & 0x03];
+        p >>= 2;
+        ptr_buffer[1] = tile_palette[p & 0x03];
+        p >>= 2;
+        ptr_buffer[0] = tile_palette[p & 0x03];
+
+        ptr_buffer += 4;
+        ptr_scanline_meta += 4;
+#endif
         uint16_t pattern = ((ptr_pattern_tile[8] & 0xAA) << 8) | ((ptr_pattern_tile[8] & 0x55) << 1)
                     | ((ptr_pattern_tile[0] & 0xAA) << 7) | (ptr_pattern_tile[0] & 0x55);
         uint16_t tile_palette[4];
@@ -263,7 +319,7 @@ inline void Ppu2C02::renderBackground()
             uint8_t pixel = (pattern >> pixel_shift[i]) & 3;
             *ptr_buffer++ = tile_palette[pixel];
             *ptr_scanline_meta++ = pixel_metadata[pixel]; // Store if pixel is transparent for sprite rendering
-        }
+        }   
 
         x_tile++;
         if ((x_tile & 1) == 0)
@@ -286,9 +342,14 @@ inline void Ppu2C02::renderBackground()
 
             attribute_shift ^= 2;
             attribute = ((attribute_byte >> attribute_shift) & 0x03) << 2;
+            //palette_table((x) & 0x1F) ^ (((x) & 0x13) == 0x10 ? 0x10 : 0x00)
+            tile_palette[1] = nes_palette[READ_PALETTE(attribute + 1)];
+            tile_palette[2] = nes_palette[READ_PALETTE(attribute + 2)];
+            tile_palette[3] = nes_palette[READ_PALETTE(attribute + 3)];
         }
     }
-    ptr_buffer = /*scanline_buffer*/display_buffer[write_buf_idx] + x;
+
+    ptr_buffer = display_buffer[write_buf_idx] + x;
 }
 
 inline void Ppu2C02::renderSprites(uint16_t scanline)
@@ -337,8 +398,8 @@ inline void Ppu2C02::renderSprites(uint16_t scanline)
         tile_addr = (control.sprite_size) ? ((tile_index & 0x01) << 12) | ((tile_index & 0xFE) << 4) : offset + (tile_index << 4);
         ptr_tile = cart->ppuReadPtr(tile_addr);
 
-        y_offset = scanline - sprite_y;
-        if (y_offset > 7) y_offset += 8;
+    y_offset = scanline - sprite_y;
+    if (y_offset > 7) y_offset += 8;
         if (attribute_byte & 0x80) // If flip sprite vertically
         {
             y_offset -= (control.sprite_size) ? 23 : 7;
@@ -500,6 +561,7 @@ void Ppu2C02::fakeSpriteHit(uint16_t scanline)
         //     }
         // }
     }
+
     cart->ppuScanline();
 #endif
 }

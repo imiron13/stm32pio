@@ -204,6 +204,16 @@ void USB_LP_IRQHandler(void)
   /* USER CODE END USB_LP_IRQn 1 */
 }
 
+void USB_HP_IRQHandler(void)
+{
+    // INTENTIONALLY EMPTY
+}
+
+void USBWakeUp_IRQHandler(void)
+{
+    // INTENTIONALLY EMPTY
+}
+
 /**
   * @brief This function handles TIM1 update interrupt and TIM16 global interrupt.
   */

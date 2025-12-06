@@ -3,6 +3,7 @@
 #include <cstring>
 #include <memory>
 #include <malloc.h>
+#include <array>
 
 #include <gpio_pin_stm32.h>
 #include <board.h>
@@ -30,7 +31,7 @@
 #include "st7735.h"
 #include "st7735_vt100.h"
 #include "fonts.h"
-
+#include "ili9341.h"
 #include <keypad_4x1.h>
 /*extern "C" {
 #include <eeprom_emul.h>
@@ -61,6 +62,15 @@ extern TIM_HandleTypeDef htim2;
 extern TIM_HandleTypeDef htim3;
 
 Shell_t shell;
+
+GpioPinPortA_t<6> keypad_gnd;
+GpioPinPortA_t<4> keypad_key2;
+GpioPinPortA_t<2> keypad_key1;
+GpioPinPortA_t<0> keypad_key4;
+GpioPinPortC_t<15> keypad_key3;
+
+
+Keypad_4x1 keypad(&keypad_key1, &keypad_key2, &keypad_key3, &keypad_key4, &keypad_gnd);
 
 #if (EN_AUDIO_SHELL_CMDS == 1)
 #include <math.h>
@@ -110,17 +120,17 @@ extern const unsigned int _binary_loonar_nes_size;
 #define NSF_ROM   ((uint8_t*)&_binary_loonar_nes_start)
 #define NSF_ROM_SIZE  ((unsigned int)&_binary_loonar_nes_size)*/
 
-/*extern const uint8_t _binary_smario_nes_start;
+extern const uint8_t _binary_smario_nes_start;
 extern const unsigned int _binary_smario_nes_size;
 
 #define NSF_ROM   ((uint8_t*)&_binary_smario_nes_start)
-#define NSF_ROM_SIZE  ((unsigned int)&_binary_smario_nes_size)*/
+#define NSF_ROM_SIZE  ((unsigned int)&_binary_smario_nes_size)
 
-extern const uint8_t _binary_tanks_nes_start;
+/*extern const uint8_t _binary_tanks_nes_start;
 extern const unsigned int _binary_tanks_nes_size;
 
 #define NSF_ROM   ((uint8_t*)&_binary_tanks_nes_start)
-#define NSF_ROM_SIZE  ((unsigned int)&_binary_tanks_nes_size)
+#define NSF_ROM_SIZE  ((unsigned int)&_binary_tanks_nes_size)*/
 
 
 Cartridge nes_cart(NSF_ROM, NSF_ROM_SIZE, false);
@@ -756,24 +766,32 @@ extern "C" void task_nes_emu_main(void *argument)
         uint32_t time_start = DWT->CYCCNT;
         uint32_t elapsed;
         uint32_t frame __attribute__((used))= 0;
-        //for (frame = 0; frame < 100; frame++)
+        for (frame = 0; frame < 100; frame++)
         {
             bus.clock();
 
             button1.update();
             button2.update();
+            keypad.update();
             bus.controller = 0x00;
             bus.controller |= (button1.is_pressed() ? Bus::CONTROLLER::Start : 0x00);
             bus.controller |= (button2.is_pressed() ? Bus::CONTROLLER::A : 0x00);
+            bus.controller |= (keypad.button1().is_pressed() ? Bus::CONTROLLER::Left : 0x00);
+            bus.controller |= (keypad.button2().is_pressed() ? Bus::CONTROLLER::Right : 0x00);
+            bus.controller |= (keypad.button4().is_pressed() ? Bus::CONTROLLER::A : 0x00);
+
+            if (keypad.button3().is_pressed_event())
+            {
+            }
         };
-#if 0        
+#if 1
         //DWT_Stats::Print();
         elapsed = DWT->CYCCNT - time_start;
         //__enable_irq();
         uint32_t cycles_per_frame = elapsed / frame;
         uint32_t fps = (SystemCoreClock + cycles_per_frame / 2) / cycles_per_frame;
-        uint32_t cpu_cycles_per_sec = fps * 299280; // NTSC CPU cycles per frame
-        uint32_t apu_cycles_per_sec = fps * 299280 / 2;
+        uint32_t cpu_cycles_per_sec = fps * 29928; // NTSC CPU cycles per frame
+        uint32_t apu_cycles_per_sec = fps * 29928 / 2;
         uint32_t apu_instructions_per_sec = bus.cpu.total_instructions * 1000 / elapsed;
         bus.cpu.total_cycles = 0;
         bus.cpu.apu.total_cycles = 0;
@@ -955,7 +973,7 @@ void apuInit()
         0x30, 0x08, 0x00, 0x00, // Pulse 2
         0x80, 0x00, 0x00, 0x00, // Triangle
         0x30, 0x00, 0x00, 0x00, // Noise
-        0x00, 0x00, 0x00, 0x00, // DMC
+        0x00, 0x00, 0x00, 0x00 // DMC
     };
     for (size_t i = 0; i < initialRegisters.size(); i++) {
         bus.cpu.apu.cpuWrite(0x4000 + i, initialRegisters[i]);
@@ -970,15 +988,15 @@ const uint32_t NSF_HEADER_SIZE = 0x80;
 extern "C" void init()
 {
 #if 1
-    //MX_USB_DEVICE_Init();
+    MX_USB_DEVICE_Init();
 
     FILE *fuart1 = uart_fopen(&huart1);
     stdout = fuart1;
 
-    /*FILE *fusb_vcom = usb_vcom_fopen();
+    FILE *fusb_vcom = usb_vcom_fopen();
     stdout = fusb_vcom;
 
-    HAL_Delay(2000);*/  // delay for USB reconnect
+    HAL_Delay(2000);  // delay for USB reconnect
 
     printf(BG_BLACK FG_BRIGHT_WHITE VT100_CLEAR_SCREEN VT100_CURSOR_HOME VT100_SHOW_CURSOR);
     printf(ENDL "Hello from %s (FreeRTOS)!" ENDL, MCU_NAME_STR);
@@ -990,14 +1008,9 @@ extern "C" void init()
     printf("SysClk = %ld KHz" ENDL, HAL_RCC_GetSysClockFreq() / 1000);
 #endif
     //apu.connectDma(&audio_output);
-    /*GpioPinPortB_t<10> keypad_key2;
-    GpioPinPortB_t<2> keypad_key1;
-    GpioPinPortB_t<0> keypad_key4;
-    GpioPinPortA_t<7> keypad_key3;
-    Keypad_4x1 keypad(&keypad_key1, &keypad_key2, &keypad_key3, &keypad_key4);
-    keypad.init();*/
+    keypad.init();
 
-    ST7735_Init();
+    /*ST7735_Init();
     ST7735_FillScreen(ST7735_GREEN);
     St7735_Vt100_t lcd_vt100_terminal;
     lcd_vt100_terminal.init(Font_7x10);
@@ -1005,7 +1018,21 @@ extern "C" void init()
     init_shell(flcd);
     fprintf(flcd, "Hello from %s (FreeRTOS)!" ENDL, MCU_NAME_STR);
     ST7735_SetAddressWindow(0, 0, 127, 159);
-    HAL_GPIO_WritePin(ST7735_DC_GPIO_Port, ST7735_DC_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(ST7735_DC_GPIO_Port, ST7735_DC_Pin, GPIO_PIN_SET);*/
+    //ili9341_Init();
+    ILI9341_Init();
+    ILI9341_SetAddressWindow(32, 0, /*127*/32 + 255, 239);
+    //ILI9341_FillScreen(ILI9341_YELLOW);
+    //ili9341_DisplayOff();
+    //ili9341_DisplayOn();
+    HAL_GPIO_WritePin(ILI9341_DC_GPIO_Port, ILI9341_DC_Pin, GPIO_PIN_SET);
+    //ili9341_FillScreen(ILI9341_GREEN);
+    //Ili9341_Vt100_t lcd_vt100_terminal;
+    //lcd_vt100_terminal.init(Font_7x10);
+  
+    hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_4;
+    hspi1.Init.DataSize = SPI_DATASIZE_16BIT;
+    HAL_SPI_Init(&hspi1);
 
     bus.cpu.apu.connectDma(&audio_output);
     bus.cpu.connectBus(&bus);

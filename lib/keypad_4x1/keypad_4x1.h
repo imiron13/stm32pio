@@ -3,6 +3,7 @@
 
 #pragma once
 
+// Pinout left to right: ground, key2, key1, key4, key3
 class Keypad_4x1 
 {
     GpioPinInterface_t *m_gpio_button1;
