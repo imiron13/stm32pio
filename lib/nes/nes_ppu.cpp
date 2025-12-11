@@ -8,11 +8,12 @@ using namespace std;
 #define DRAM_ATTR
 #define IRAM_ATTR
 
-DMA_ATTR uint16_t Ppu2C02::display_buffer[2][BUFFER_SIZE * SCANLINES_PER_BUFFER];
+DMA_ATTR uint16_t Ppu2C02::display_buffer[2][SCANLINE_SIZE * SCANLINES_PER_BUFFER];
+uint16_t* Ppu2C02::ptr_display = Ppu2C02::display_buffer[1];
 
 static constexpr inline uint16_t swap2(uint16_t c) { return (uint16_t)( ((c & 0x001F) << 11) | (c & 0x07E0) | ((c >> 11) & 0x001F) ); }
-//static constexpr inline uint16_t swap_rb(uint16_t c) { return ((c & 0xFF) << 8) | (c >> 8); }
-static constexpr inline uint16_t swap_rb(uint16_t c) { return c; }
+static constexpr inline uint16_t swap_rb(uint16_t c) { return ((c & 0xFF) << 8) | (c >> 8); }
+//static constexpr inline uint16_t swap_rb(uint16_t c) { return c; }
 //static constexpr inline uint16_t swap_rb(uint16_t c) { return swap2(c); }
 //static constexpr inline uint16_t swap_rb(uint16_t c) { return ((swap2(c) & 0xFF) << 8) | (swap2(c) >> 8); }
 //static constexpr inline uint16_t swap_rb(uint16_t c) { return swap2((((c) & 0xFF) << 8) | ((c) >> 8)); }
@@ -247,18 +248,18 @@ void Ppu2C02::renderBackground()
     {
         uint16_t bg_color = nes_palette[palette_table[0]];
         uint32_t color32 = ((uint32_t)bg_color << 16) | bg_color;
-        uint32_t* buffer = (uint32_t*)display_buffer[write_buf_idx]/*scanline_buffer*/;
+        uint32_t* buffer = (uint32_t*)scanline_buffer;
         for (int i = 0, size = (BUFFER_SIZE >> 1); i < size; i++) 
             buffer[i] = color32;
 
         memset(scanline_metadata, 0x80, BUFFER_SIZE);
-        ptr_buffer = display_buffer[write_buf_idx] /*scanline_buffer*/ + x;
+        ptr_buffer = scanline_buffer + x;
         ptr_scanline_meta = scanline_metadata + x;
         return;
     }
 
     uint16_t bg_color = nes_palette[palette_table[0]];
-    ptr_buffer = display_buffer[write_buf_idx] /*scanline_buffer*/;
+    ptr_buffer = scanline_buffer;
     ptr_scanline_meta = scanline_metadata;
     x_tile = v.coarse_x;
     y_tile = v.coarse_y;
@@ -372,7 +373,7 @@ inline void Ppu2C02::renderSprites(uint16_t scanline)
 
     sprite_size = (control.sprite_size ? 16 : 8);
 
-    uint16_t* buffer_offset = /*scanline_buffer*/display_buffer[write_buf_idx] + x;
+    uint16_t* buffer_offset = scanline_buffer + x;
     uint8_t* metadata_offset = scanline_metadata + x;
     for (int i = 0; i < 64; i++, ptr_sprite_OAM++)
     {
@@ -568,7 +569,8 @@ void Ppu2C02::fakeSpriteHit(uint16_t scanline)
 
 inline void Ppu2C02::finishScanline(uint16_t scanline)
 {
-    //memcpy(ptr_display + (scanline_counter * SCANLINE_SIZE), ptr_buffer, SCANLINE_SIZE * sizeof(uint16_t));
+    memcpy(ptr_display + (scanline_counter * SCANLINE_SIZE), ptr_buffer, SCANLINE_SIZE * sizeof(uint16_t));
+    //memset(ptr_display + (scanline_counter * SCANLINE_SIZE), 0xC2, SCANLINE_SIZE * sizeof(uint16_t));
     scanline_counter++;
     if (scanline_counter >= SCANLINES_PER_BUFFER) 
     { 
@@ -591,6 +593,7 @@ void Ppu2C02::reset()
 	PPUDATA_buffer = 0x00;
     nametable_byte = 0x00;
     attribute_byte = 0x00;
+    ptr_display = display_buffer[1];
 }
 
 void Ppu2C02::connectCartridge(Cartridge* cartridge)

@@ -772,17 +772,17 @@ extern "C" void task_nes_emu_main(void *argument)
 
             button1.update();
             button2.update();
-            keypad.update();
+            //keypad.update();
             bus.controller = 0x00;
             bus.controller |= (button1.is_pressed() ? Bus::CONTROLLER::Start : 0x00);
             bus.controller |= (button2.is_pressed() ? Bus::CONTROLLER::A : 0x00);
-            bus.controller |= (keypad.button1().is_pressed() ? Bus::CONTROLLER::Left : 0x00);
+            /*bus.controller |= (keypad.button1().is_pressed() ? Bus::CONTROLLER::Left : 0x00);
             bus.controller |= (keypad.button2().is_pressed() ? Bus::CONTROLLER::Right : 0x00);
             bus.controller |= (keypad.button4().is_pressed() ? Bus::CONTROLLER::A : 0x00);
 
             if (keypad.button3().is_pressed_event())
             {
-            }
+            }*/
         };
 #if 1
         //DWT_Stats::Print();
@@ -985,6 +985,20 @@ void apuInit()
 
 const uint32_t NSF_HEADER_SIZE = 0x80;
 
+extern TIM_HandleTypeDef htim1;
+
+void My_LCD_TransferComplete(DMA_HandleTypeDef *hdma)
+{
+    // 1. Stop the Timer immediately!
+    HAL_TIM_PWM_Stop(&htim1, TIM_CHANNEL_1);
+
+    // 2. Disable DMA Request
+    __HAL_TIM_DISABLE_DMA(&htim1, TIM_DMA_UPDATE);
+
+    // 3. Deselect Chip (Optional, but good practice)
+    //HAL_GPIO_WritePin(LCD_CS_GPIO_Port, LCD_CS_Pin, GPIO_PIN_SET);
+}
+
 extern "C" void init()
 {
 #if 1
@@ -1008,7 +1022,7 @@ extern "C" void init()
     printf("SysClk = %ld KHz" ENDL, HAL_RCC_GetSysClockFreq() / 1000);
 #endif
     //apu.connectDma(&audio_output);
-    keypad.init();
+    //keypad.init();
 
     /*ST7735_Init();
     ST7735_FillScreen(ST7735_GREEN);
@@ -1020,19 +1034,74 @@ extern "C" void init()
     ST7735_SetAddressWindow(0, 0, 127, 159);
     HAL_GPIO_WritePin(ST7735_DC_GPIO_Port, ST7735_DC_Pin, GPIO_PIN_SET);*/
     //ili9341_Init();
+    LCD_WR_MODE_GPIO();
     ILI9341_Init();
+    HAL_GPIO_WritePin(ILI9341_CS_GPIO_Port, ILI9341_CS_Pin, GPIO_PIN_RESET);
     ILI9341_SetAddressWindow(32, 0, /*127*/32 + 255, 239);
     //ILI9341_FillScreen(ILI9341_YELLOW);
     //ili9341_DisplayOff();
     //ili9341_DisplayOn();
     HAL_GPIO_WritePin(ILI9341_DC_GPIO_Port, ILI9341_DC_Pin, GPIO_PIN_SET);
+
+    for (int i = 0; i < SCANLINE_SIZE; i++)
+    {
+        //bus.ppu.display_buffer[0][i] = 0x142D;
+        //bus.ppu.display_buffer[1][i] = 0x142D;
+        bus.ppu.display_buffer[0][i] = 0x00FF;
+        bus.ppu.display_buffer[1][i] = 0x00FF;
+    }
+
     //ili9341_FillScreen(ILI9341_GREEN);
     //Ili9341_Vt100_t lcd_vt100_terminal;
     //lcd_vt100_terminal.init(Font_7x10);
   
-    hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_4;
+    /*hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_4;
     hspi1.Init.DataSize = SPI_DATASIZE_16BIT;
-    HAL_SPI_Init(&hspi1);
+    HAL_SPI_Init(&hspi1);*/
+    LCD_WR_MODE_PWM();
+    /* 1. Set the Address of the GPIO B Output Data Register */
+    /* Note: We cast to uint8_t* to enforce byte-width access */
+    uint32_t destination_address = (uint32_t)&GPIOB->ODR;
+
+    /* 2. Configure the DMA Source and Length */
+    /* Note: Use the HAL or LL macro depending on your init */
+    /* Example using HAL_DMA_Start (But we need it linked to TIM1) */
+
+    // The standard HAL_TIM_PWM_Start_DMA won't work perfectly here 
+    // because it expects to transfer data TO the CCR register (Duty Cycle), 
+    // not to a GPIO.
+//ppu.display_buffer[ppu.write_buf_idx], 256 * SCANLINES_PER_BUFFER * 2
+    // You must manually link the DMA to the External destination:
+
+    htim1.hdma[TIM_DMA_ID_UPDATE]->XferCpltCallback = My_LCD_TransferComplete;
+    htim1.hdma[TIM_DMA_ID_UPDATE]->Init.Mode = DMA_CIRCULAR;
+    HAL_DMA_Init(htim1.hdma[TIM_DMA_ID_UPDATE]);
+    __HAL_TIM_MOE_ENABLE(&htim1); // Main Output Enable for TIM1
+    bus.ppu.write_buf_idx = 0;
+    bus.ppu.x = 0;
+    /*for (int i = 0; i < 8; i++)
+    {
+        bus.ppu.display_buffer[bus.ppu.write_buf_idx][i] = 0x142D;
+    }*/
+#if 1
+    HAL_DMA_Start(htim1.hdma[TIM_DMA_ID_UPDATE], (uint32_t)bus.ppu.display_buffer[0], destination_address, SCANLINE_SIZE * SCANLINES_PER_BUFFER * 4);
+
+    // 3. Enable the TIM1 Update DMA Request
+    __HAL_TIM_ENABLE_DMA(&htim1, TIM_DMA_UPDATE);
+
+    // 4. Start the PWM (This starts the clock and triggers the DMA)
+    HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
+#endif
+    //while (1);
+    // ... Wait for transfer complete ...
+
+    // 5. Stop everything
+    //HAL_TIM_PWM_Stop(&htim1, TIM_CHANNEL_1);
+    //__HAL_TIM_DISABLE_DMA(&htim1, TIM_DMA_UPDATE);
+
+    /* Now check Logic Analyzer. 
+    If you see a square wave now, your Timer/GPIO settings are correct, 
+    and the issue lies in your DMA configuration (likely an error flag triggering). */
 
     bus.cpu.apu.connectDma(&audio_output);
     bus.cpu.connectBus(&bus);

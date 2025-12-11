@@ -164,9 +164,10 @@ private:
     uint8_t sprite_count = 0;
 public:
     uint8_t x;
-    static uint16_t display_buffer[2][BUFFER_SIZE * SCANLINES_PER_BUFFER];
+    static uint16_t display_buffer[2][SCANLINE_SIZE * SCANLINES_PER_BUFFER];
     uint8_t* ptr_sprite = (uint8_t*)sprite;
-    uint16_t* ptr_buffer = display_buffer[0];
+    uint16_t* ptr_buffer = scanline_buffer;
+    static uint16_t* ptr_display;
     uint32_t write_buf_idx = 0;
 };
 

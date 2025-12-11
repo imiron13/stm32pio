@@ -17,12 +17,36 @@
 #define ILI9341_SPI_PORT hspi1
 extern SPI_HandleTypeDef ILI9341_SPI_PORT;
 
-#define ILI9341_RES_Pin       GPIO_PIN_9
-#define ILI9341_RES_GPIO_Port GPIOB
-#define ILI9341_CS_Pin        GPIO_PIN_4
+#define ILI9341_RES_Pin       GPIO_PIN_1
+#define ILI9341_RES_GPIO_Port GPIOA
+#define ILI9341_CS_Pin        GPIO_PIN_2
 #define ILI9341_CS_GPIO_Port  GPIOA
-#define ILI9341_DC_Pin        GPIO_PIN_10
-#define ILI9341_DC_GPIO_Port  GPIOB
+#define ILI9341_DC_Pin        GPIO_PIN_0
+#define ILI9341_DC_GPIO_Port  GPIOA
+
+#define ILI9341_WR_Pin        GPIO_PIN_8
+#define ILI9341_WR_GPIO_Port  GPIOA
+
+/* PA8 Mode Configuration Macros */
+
+// 1. Switch PA8 to GPIO Output Mode (Manual Control)
+// Logic: Pre-set Pin High -> Clear Mode Bits -> Set Mode to 01 (Output)
+#define LCD_WR_MODE_GPIO()  do { \
+                                GPIOA->BSRR = GPIO_PIN_8; \
+                                GPIOA->MODER &= ~GPIO_MODER_MODE8; \
+                                GPIOA->MODER |= GPIO_MODER_MODE8_0; \
+                            } while(0)
+
+// 2. Switch PA8 to Alternate Function Mode (TIM1 Control)
+// Logic: Clear Mode Bits -> Set Mode to 10 (Alternate Function)
+#define LCD_WR_MODE_PWM()   do { \
+                                GPIOA->MODER &= ~GPIO_MODER_MODE8; \
+                                GPIOA->MODER |= GPIO_MODER_MODE8_1; \
+                            } while(0)
+
+// Manual WR Line Control Macros
+#define LCD_WR_LOW()        (GPIOA->BRR  = GPIO_PIN_8)
+#define LCD_WR_HIGH()       (GPIOA->BSRR = GPIO_PIN_8)
 
 // default orientation
 #define ILI9341_WIDTH  240

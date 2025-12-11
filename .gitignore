@@ -1,3 +1,14 @@
 .pio
+*.o
+*.bin
+*.map
+*.nes
+*.nsf
+*.vgm
+*.hex
+*.code-workspace
 .vscode/*
+
+
+
 

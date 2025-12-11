@@ -18,18 +18,29 @@ static void ILI9341_Reset() {
 
 static void ILI9341_WriteCommand(uint8_t cmd) {
     HAL_GPIO_WritePin(ILI9341_DC_GPIO_Port, ILI9341_DC_Pin, GPIO_PIN_RESET);
-    HAL_SPI_Transmit(&ILI9341_SPI_PORT, &cmd, sizeof(cmd), HAL_MAX_DELAY);
+    HAL_GPIO_WritePin(ILI9341_WR_GPIO_Port, ILI9341_WR_Pin, GPIO_PIN_SET);
+    *(uint8_t*)&GPIOB->ODR = cmd;
+    HAL_GPIO_WritePin(ILI9341_WR_GPIO_Port, ILI9341_WR_Pin, GPIO_PIN_RESET);
+    __NOP();__NOP();__NOP();__NOP();
+    HAL_GPIO_WritePin(ILI9341_WR_GPIO_Port, ILI9341_WR_Pin, GPIO_PIN_SET);
+    //HAL_SPI_Transmit(&ILI9341_SPI_PORT, &cmd, sizeof(cmd), HAL_MAX_DELAY);
 }
 
 static void ILI9341_WriteData(uint8_t* buff, size_t buff_size) {
     HAL_GPIO_WritePin(ILI9341_DC_GPIO_Port, ILI9341_DC_Pin, GPIO_PIN_SET);
 
     // split data in small chunks because HAL can't send more then 64K at once
+    HAL_GPIO_WritePin(ILI9341_WR_GPIO_Port, ILI9341_WR_Pin, GPIO_PIN_SET);
     while(buff_size > 0) {
-        uint16_t chunk_size = buff_size > 32768 ? 32768 : buff_size;
-        HAL_SPI_Transmit(&ILI9341_SPI_PORT, buff, chunk_size, HAL_MAX_DELAY);
-        buff += chunk_size;
-        buff_size -= chunk_size;
+        //uint16_t chunk_size = buff_size > 32768 ? 32768 : buff_size;
+        //HAL_SPI_Transmit(&ILI9341_SPI_PORT, buff, chunk_size, HAL_MAX_DELAY);
+        //buff += chunk_size;
+        //buff_size -= chunk_size;
+        *(uint8_t*)&GPIOB->ODR = *buff++;
+        HAL_GPIO_WritePin(ILI9341_WR_GPIO_Port, ILI9341_WR_Pin, GPIO_PIN_RESET);
+        __NOP();__NOP();__NOP();__NOP();
+        HAL_GPIO_WritePin(ILI9341_WR_GPIO_Port, ILI9341_WR_Pin, GPIO_PIN_SET);
+        buff_size--;
     }
 }
 
@@ -203,6 +214,16 @@ void ILI9341_Init() {
         uint8_t data[] = { ILI9341_ROTATION };
         ILI9341_WriteData(data, sizeof(data));
     }
+
+    /*while (1) {
+        // 0x21 = Display Inversion ON
+        ILI9341_WriteCommand(0x21); 
+        HAL_Delay(1000);
+
+        // 0x20 = Display Inversion OFF
+        ILI9341_WriteCommand(0x20); 
+        HAL_Delay(1000);
+    }*/
 
     ILI9341_Unselect();
 }
