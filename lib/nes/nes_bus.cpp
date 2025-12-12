@@ -14,7 +14,7 @@
 using namespace std;
 
 #define IRAM_ATTR
-#define FRAMESKIP
+//#define FRAMESKIP
 
 Bus::Bus()
 {
@@ -194,81 +194,100 @@ uint32_t Get_DMA_Free_Space(uint32_t cpu_write_index, uint32_t buffer_size)
 #define DISPLAY_PAUSE()   (TIM1->CR1 &= ~TIM_CR1_CEN)
 #define DISPLAY_RESUME()  (TIM1->CR1 |= TIM_CR1_CEN)
 
-IRAM_ATTR void Bus::clock()
+
+/* Add this to your Initialization or Burst Macro */
+#define CONFIGURE_BURST_MODE(pixels) do { \
+    /* ... (Your existing setup) ... */ \
+    TIM1->RCR = (pixels) - 1; \
+    TIM1->CCR2 = 1; \
+    TIM1->DIER |= TIM_DIER_CC2DE; \
+    TIM1->DIER &= ~TIM_DIER_UDE; \
+    TIM1->CR1 |= TIM_CR1_OPM; \
+    \
+    /* LOAD SHADOW REGISTERS */ \
+    TIM1->EGR = TIM_EGR_UG; \
+    __HAL_TIM_CLEAR_FLAG(&htim1, TIM_FLAG_UPDATE); \
+    \
+    /* THE FIX: ENABLE OUTPUTS MANUALLY */ \
+    /* 1. Enable Channel 1 (CC1E) */ \
+    TIM1->CCER |= TIM_CCER_CC1E; \
+    /* 2. Enable Main Output (MOE) - Critical for TIM1/TIM8 */ \
+    TIM1->BDTR |= TIM_BDTR_MOE; \
+} while(0)
+
+void set_window()
 {
-    ppu.write_buf_idx = 0;
-    ppu.ptr_display = ppu.display_buffer[1];
-    #if 0
-    __HAL_TIM_SET_COUNTER(&htim1, 0);
-__HAL_TIM_CLEAR_FLAG(&htim1, TIM_FLAG_UPDATE);
     LCD_WR_MODE_GPIO();
-    HAL_GPIO_WritePin(ILI9341_CS_GPIO_Port, ILI9341_CS_Pin, GPIO_PIN_RESET);
-    ILI9341_SetAddressWindow(32, 0, /*127*/32 + 255, 239);
+    ILI9341_SetAddressWindow(32, 0, 32 + 255, 239);
     HAL_GPIO_WritePin(ILI9341_DC_GPIO_Port, ILI9341_DC_Pin, GPIO_PIN_SET);
     LCD_WR_MODE_PWM();
-    __HAL_TIM_CLEAR_FLAG(&htim1, TIM_FLAG_UPDATE);
-    HAL_DMA_Start(htim1.hdma[TIM_DMA_ID_UPDATE], (uint32_t)ppu.display_buffer[0], (uint32_t)&GPIOB->ODR, SCANLINE_SIZE * SCANLINES_PER_BUFFER * 4);
-    __HAL_TIM_ENABLE_DMA(&htim1, TIM_DMA_UPDATE);
-#endif
-if (frame_latch) { 
-// 1. Reset Timer Counter (So it starts at 0)
-__HAL_TIM_SET_COUNTER(&htim1, 0);
-
-// 2. FORCE Output Compare to Inactive Level (High) manually
-// This primes the internal logic to output High immediately once the timer starts
-// (Assuming PWM Mode 2 + Polarity Low)
-//__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, SCANLINE_SIZE); // Ensure CCR > 0
-
-// 3. Clear Flags (Critical to prevent immediate DMA fire)
-__HAL_TIM_CLEAR_FLAG(&htim1, TIM_FLAG_UPDATE);
-
-// 4. Switch Pin Mode
-LCD_WR_MODE_GPIO();
-HAL_GPIO_WritePin(ILI9341_CS_GPIO_Port, ILI9341_CS_Pin, GPIO_PIN_RESET);
-ILI9341_SetAddressWindow(32, 0, 32 + 255, 239);
-HAL_GPIO_WritePin(ILI9341_DC_GPIO_Port, ILI9341_DC_Pin, GPIO_PIN_SET);
-
-// 5. CRITICAL: Ensure GPIO is High before switching
-HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_SET); 
-
-// 8. Start DMA
-//HAL_DMA_Start(htim1.hdma[TIM_DMA_ID_UPDATE], (uint32_t)ppu.display_buffer[0], (uint32_t)&GPIOB->ODR, SCANLINE_SIZE * SCANLINES_PER_BUFFER * 4);
-htim1.hdma[TIM_DMA_ID_UPDATE]->Instance->CCR &= ~DMA_CCR_EN; 
-htim1.hdma[TIM_DMA_ID_UPDATE]->Instance->CNDTR = SCANLINE_SIZE * SCANLINES_PER_BUFFER * 4; // Set Length
-htim1.hdma[TIM_DMA_ID_UPDATE]->Instance->CCR |= DMA_CCR_EN; // Enable DMA Channel
-
-__HAL_TIM_ENABLE_DMA(&htim1, TIM_DMA_UPDATE);
-
-/* 3. CAPTURE CURRENT DMA COUNT */
-uint32_t initial_dma_count = __HAL_DMA_GET_COUNTER(htim1.hdma[TIM_DMA_ID_UPDATE]);
-
-/* 3. THE FIX: Manually Trigger the DMA immediately */
-/* Generating a Software Update (UG) forces the DMA to fire ONCE right now. */
-/* This loads Byte 0 onto the pins before the Timer even starts counting. */
-TIM1->EGR = TIM_EGR_UG; 
-
-/* WAIT for the DMA to actually perform the transfer */
-/* We spin until the counter drops by at least 1, proving the byte is in ODR. */
-/* This ensures Byte 0 is physically on the pins before we proceed. */
-while (__HAL_DMA_GET_COUNTER(htim1.hdma[TIM_DMA_ID_UPDATE]) == initial_dma_count) {
-    // Safety break if DMA fails (optional)
 }
 
-/* 4. Clear the Flag (Safety) */
-/* The UG bit sets the Update Flag (UIF). We clear it to ensure the 
-   timer doesn't think it missed an interrupt/event when it starts. */
-__HAL_TIM_CLEAR_FLAG(&htim1, TIM_FLAG_UPDATE);
+void setx(uint32_t x0, uint32_t x1)
+{
+    LCD_WR_MODE_GPIO();
+    ILI9341_WriteCommand(0x2A); // CASET
+    {
+        uint8_t data[] = { (x0 >> 8) & 0xFF, x0 & 0xFF, (x1 >> 8) & 0xFF, x1 & 0xFF };
+        ILI9341_WriteData(data, sizeof(data));
+    }
 
-// 6. Switch to PWM (Timer takes over)
-// If OIS1 is correct, it stays High.
-LCD_WR_MODE_PWM();
-
-// 7. Clear Flag AGAIN just in case the switch caused noise
-__HAL_TIM_CLEAR_FLAG(&htim1, TIM_FLAG_UPDATE);
+    // write to RAM
+    ILI9341_WriteCommand(0x2C); // RAMWR
+    HAL_GPIO_WritePin(ILI9341_DC_GPIO_Port, ILI9341_DC_Pin, GPIO_PIN_SET);
+    LCD_WR_MODE_PWM();
 }
 
-// 9. Start Timer (The train begins)
-//HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
+uint32_t g_buf_addr;
+
+void lcd_sync(uint32_t scanline)
+{
+/* --- SYNC PHASE (Consumer Check) --- */
+        
+        /* A. Wait for Previous Line to Finish */
+        /* If the timer is still running (CEN=1), it means it hasn't finished */
+        /* sending the previous 256 pixels. We wait here. */
+        while (TIM1->CR1 & TIM_CR1_CEN);
+
+        /* B. Check Buffer Safety (Optional but recommended) */
+        /* Ensure DMA isn't reading the half we just wrote to. */
+        /* (Use your Get_DMA_Buf_Idx logic here if needed) */
+        //setx(32, 32 + 255);
+    if (scanline % 2 == 0)
+    {
+    HAL_DMA_Abort(htim1.hdma[TIM_DMA_ID_CC2]);
+    HAL_DMA_Start(htim1.hdma[TIM_DMA_ID_CC2], 
+                  g_buf_addr, 
+                  (uint32_t)&GPIOB->ODR, 
+                  SCANLINE_SIZE * SCANLINES_PER_BUFFER * 4);
+    }
+    HAL_GPIO_WritePin(ILI9341_CS_GPIO_Port, ILI9341_CS_Pin, GPIO_PIN_SET);
+    for(volatile int i=0; i<5; i++); // Tiny delay
+    HAL_GPIO_WritePin(ILI9341_CS_GPIO_Port, ILI9341_CS_Pin, GPIO_PIN_RESET);
+    LCD_WR_MODE_GPIO();
+    ILI9341_SetAddressWindow(32, scanline, 32 + 255, 239);
+    HAL_GPIO_WritePin(ILI9341_DC_GPIO_Port, ILI9341_DC_Pin, GPIO_PIN_SET);
+    LCD_WR_MODE_PWM();
+        /* --- FIRE PHASE --- */
+        
+        /* Kick the Timer to send exactly 256 pixels */
+        /* Because OPM is on, it will run 256 times, then clear CEN automatically. */
+        TIM1->CR1 |= TIM_CR1_CEN;
+}
+
+IRAM_ATTR void Bus::clock()
+{
+    g_buf_addr = (uint32_t)ppu.display_buffer;
+    ppu.write_buf_idx = 0;
+    ppu.ptr_display = ppu.display_buffer[1];
+    HAL_GPIO_WritePin(ILI9341_CS_GPIO_Port, ILI9341_CS_Pin, GPIO_PIN_RESET);
+    set_window();
+
+    HAL_DMA_Abort(htim1.hdma[TIM_DMA_ID_CC2]);
+    HAL_DMA_Start(htim1.hdma[TIM_DMA_ID_CC2], 
+                  (uint32_t)ppu.display_buffer, 
+                  (uint32_t)&GPIOB->ODR, 
+                  SCANLINE_SIZE * SCANLINES_PER_BUFFER * 4);
 
     // 1 frame == 341 dots * 261 scanlines
     // Visible scanlines 0-239
@@ -280,23 +299,23 @@ __HAL_TIM_CLEAR_FLAG(&htim1, TIM_FLAG_UPDATE);
     for (ppu_scanline = 0; ppu_scanline < 240; ppu_scanline += 3)
     {
         #ifndef FRAMESKIP
-        if (ppu_scanline > 0) {
-            while ( Get_DMA_Remain() / (SCANLINE_SIZE * 2) == ppu.write_buf_idx);
-        }
         ppu.renderScanline(ppu_scanline);
+        if (ppu_scanline > 0)
+            lcd_sync(ppu_scanline - 1);
         #else
             if (frame_latch) { while (Get_DMA_Remain() / (SCANLINE_SIZE * 2) == ppu.write_buf_idx);ppu.renderScanline(ppu_scanline); }
             else { ppu.fakeSpriteHit(ppu_scanline); }
         #endif
-        if (frame_latch && ppu_scanline == 0)
+        if (ppu_scanline == 0)
         {
-            HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
+            CONFIGURE_BURST_MODE(256*2);
+            lcd_sync(ppu_scanline);
         }
         cpu.clock(113);
 
         #ifndef FRAMESKIP
-        while ( Get_DMA_Remain() / (SCANLINE_SIZE * 2) == ppu.write_buf_idx);
         ppu.renderScanline(ppu_scanline + 1);
+        lcd_sync(ppu_scanline);
         #else
             if (frame_latch) { while (Get_DMA_Remain() / (SCANLINE_SIZE * 2) == ppu.write_buf_idx);ppu.renderScanline(ppu_scanline + 1); }
             else { ppu.fakeSpriteHit(ppu_scanline + 1); }
@@ -304,10 +323,8 @@ __HAL_TIM_CLEAR_FLAG(&htim1, TIM_FLAG_UPDATE);
         cpu.clock(114);
 
         #ifndef FRAMESKIP
-        while (Get_DMA_Remain() / (SCANLINE_SIZE * 2) == ppu.write_buf_idx);
         ppu.renderScanline(ppu_scanline + 2);
-            //ppu.fakeSpriteHit(ppu_scanline + 2); 
-            //ppu.incrementY();
+        lcd_sync(ppu_scanline + 1);
         #else
             if (frame_latch) { while (Get_DMA_Remain() / (SCANLINE_SIZE * 2) == ppu.write_buf_idx); ppu.renderScanline(ppu_scanline + 2); }
             else { ppu.fakeSpriteHit(ppu_scanline + 2);  }
@@ -315,20 +332,8 @@ __HAL_TIM_CLEAR_FLAG(&htim1, TIM_FLAG_UPDATE);
         cpu.clock(114);
         //cpu.apu.clock(338/2);
     }
-    while (Get_DMA_Remain() / (SCANLINE_SIZE * 2) == ppu.write_buf_idx);
-// 1. Stop the Timer Counter
-    TIM1->CR1 &= ~TIM_CR1_CEN;
-    //HAL_DMA_Abort(htim1.hdma[TIM_DMA_ID_UPDATE]);
-    // 2. FORCE WR HIGH IMMEDIATELY
-    // If the timer died while WR was Low, we must pull it High manually.
-    // However, simply setting the bit creates a Rising Edge (Write).
-    // We accept this possibility, but we must ensure CS is toggled afterwards 
-    // to reset the LCD's byte counter.
-    GPIOA->BSRR = GPIO_PIN_8;
+    while (TIM1->CR1 & TIM_CR1_CEN);
 
-    HAL_TIM_PWM_Stop(&htim1, TIM_CHANNEL_1);
-    __HAL_TIM_DISABLE_DMA(&htim1, TIM_DMA_UPDATE);
-    HAL_GPIO_WritePin(ILI9341_CS_GPIO_Port, ILI9341_CS_Pin, GPIO_PIN_SET);
     // Setup for the next frame
     // Same reason as scanlines 0-239, 2/3 of scanlines will have an extra CPU clock. 
     // Scanline 240

@@ -16,7 +16,7 @@ static void ILI9341_Reset() {
     HAL_GPIO_WritePin(ILI9341_RES_GPIO_Port, ILI9341_RES_Pin, GPIO_PIN_SET);
 }
 
-static void ILI9341_WriteCommand(uint8_t cmd) {
+void ILI9341_WriteCommand(uint8_t cmd) {
     HAL_GPIO_WritePin(ILI9341_DC_GPIO_Port, ILI9341_DC_Pin, GPIO_PIN_RESET);
     HAL_GPIO_WritePin(ILI9341_WR_GPIO_Port, ILI9341_WR_Pin, GPIO_PIN_SET);
     *(uint8_t*)&GPIOB->ODR = cmd;
@@ -26,7 +26,7 @@ static void ILI9341_WriteCommand(uint8_t cmd) {
     //HAL_SPI_Transmit(&ILI9341_SPI_PORT, &cmd, sizeof(cmd), HAL_MAX_DELAY);
 }
 
-static void ILI9341_WriteData(uint8_t* buff, size_t buff_size) {
+void ILI9341_WriteData(uint8_t* buff, size_t buff_size) {
     HAL_GPIO_WritePin(ILI9341_DC_GPIO_Port, ILI9341_DC_Pin, GPIO_PIN_SET);
 
     // split data in small chunks because HAL can't send more then 64K at once

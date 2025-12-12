@@ -1083,7 +1083,7 @@ extern "C" void init()
     {
         bus.ppu.display_buffer[bus.ppu.write_buf_idx][i] = 0x142D;
     }*/
-#if 1
+#if 0
     HAL_DMA_Start(htim1.hdma[TIM_DMA_ID_UPDATE], (uint32_t)bus.ppu.display_buffer[0], destination_address, SCANLINE_SIZE * SCANLINES_PER_BUFFER * 4);
 
     // 3. Enable the TIM1 Update DMA Request

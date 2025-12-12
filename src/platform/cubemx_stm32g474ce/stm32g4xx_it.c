@@ -58,7 +58,7 @@
 extern PCD_HandleTypeDef hpcd_USB_FS;
 extern DMA_HandleTypeDef hdma_spi2_tx;
 extern DMA_HandleTypeDef hdma_spi1_tx;
-extern DMA_HandleTypeDef hdma_tim1_up;
+extern DMA_HandleTypeDef hdma_tim1_ch2;
 extern TIM_HandleTypeDef htim6;
 
 /* USER CODE BEGIN EV */
@@ -201,7 +201,8 @@ void DMA1_Channel3_IRQHandler(void)
   /* USER CODE END DMA1_Channel3_IRQn 0 */
   //HAL_DMA_IRQHandler(&hdma_tim1_up);
   /* USER CODE BEGIN DMA1_Channel3_IRQn 1 */
-
+  HAL_DMA_IRQHandler(&hdma_tim1_ch2);
+  #if 0
   /* USER CODE END DMA1_Channel3_IRQn 1 */
 /* 1. KILL THE TIMER IMMEDIATELY (Critical Section) */
     /* Clearing the CEN bit stops the counter instantly */
@@ -222,6 +223,7 @@ void DMA1_Channel3_IRQHandler(void)
     
     /* 5. (Optional) Set CS High to end transaction safely */
     //GPIOB->BSRR = GPIO_PIN_0; // Assuming CS is PB0
+    #endif
 }
 
 /**

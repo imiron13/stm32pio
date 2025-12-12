@@ -100,4 +100,7 @@ void ILI9341_DrawImage(uint16_t x, uint16_t y, uint16_t w, uint16_t h, const uin
 void ILI9341_InvertColors(bool invert);
 void ILI9341_SetAddressWindow(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1);
 
+void ILI9341_WriteCommand(uint8_t cmd);
+void ILI9341_WriteData(uint8_t* buff, size_t buff_size);
+
 #endif // __ILI9341_H__
