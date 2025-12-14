@@ -310,7 +310,7 @@ IRAM_ATTR uint8_t Apu2A03::cpuRead(uint16_t addr)
 }
 #include "cmsis_os.h"
 
-void Apu2A03::clock(uint32_t cycles)
+/*CRITICAL_FUNCTION*/ void Apu2A03::clock(uint32_t cycles)
 { 
 	bool sample_ready = false;
 	while (cycles > 0)
@@ -336,8 +336,9 @@ void Apu2A03::clock(uint32_t cycles)
 			clock_counter = nearest_clock_event;
 		}
 		cycles -= dcycles;
-
+		apu_events++;
 		sample_ready = clock(); 
+		//clock_counter++;
 	}
 }
 
@@ -509,7 +510,7 @@ constexpr const T& min_multiple(const T& a, const Ts&... args)
 void Apu2A03::updateNearestClockEvent()
 {
 	// @TODO: handle wrap-around case
-	nearest_clock_event = min_multiple(pulse1.next_cycle, pulse2.next_cycle, triangle.next_cycle, noise.next_cycle, DMC.next_cycle, generate_sample_next_cycle);
+	nearest_clock_event = min_multiple(pulse1.next_cycle, pulse2.next_cycle, triangle.next_cycle, noise.next_cycle, /*DMC.next_cycle,*/ generate_sample_next_cycle);
 }
 
 IRAM_ATTR void Apu2A03::generateSample()

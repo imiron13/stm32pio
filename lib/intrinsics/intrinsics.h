@@ -25,3 +25,4 @@
 #define attr_section(x)    __attribute__((section(x)))
 #define fast_code_section  __attribute__((section(".ramfunc")))
 #define sram2_section __attribute__((section(".sram2_data"), aligned(4)))
+#define CRITICAL_FUNCTION __attribute__((section(".ccmram")))

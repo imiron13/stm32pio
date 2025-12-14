@@ -762,7 +762,7 @@ extern "C" void task_nes_emu_main(void *argument)
     audio_output.playBuffer(bus.cpu.apu.audio_buffer, AUDIO_BUFFER_SIZE / 2);
     while (1)
     {
-        //__disable_irq();
+        __disable_irq();
         uint32_t time_start = DWT->CYCCNT;
         uint32_t elapsed;
         uint32_t frame __attribute__((used))= 0;
@@ -787,19 +787,21 @@ extern "C" void task_nes_emu_main(void *argument)
 #if 1
         //DWT_Stats::Print();
         elapsed = DWT->CYCCNT - time_start;
-        //__enable_irq();
+        __enable_irq();
         uint32_t cycles_per_frame = elapsed / frame;
         uint32_t fps = (SystemCoreClock + cycles_per_frame / 2) / cycles_per_frame;
-        uint32_t cpu_cycles_per_sec = fps * 29928; // NTSC CPU cycles per frame
+        uint32_t cpu_cycles_per_sec = fps /** 29928*/ * ((114 + 113 + 114) * 80 + 2501) /*29781*/; // NTSC CPU cycles per frame
         uint32_t apu_cycles_per_sec = fps * 29928 / 2;
+        uint32_t apu_events_per_frame = (bus.cpu.apu.apu_events + 50) / 100;
         uint32_t apu_instructions_per_sec = bus.cpu.total_instructions * 1000 / elapsed;
         bus.cpu.total_cycles = 0;
         bus.cpu.apu.total_cycles = 0;
         bus.cpu.total_instructions = 0;
-        printf("NES Emu: %lu fps, %lu cpu_cycles/sec, %lu apu_cycles/sec, %lu instr/sec elapsed=%lu ms" ENDL,
+        printf("NES Emu: %lu fps, %lu cpu_cycles/sec, %lu apu_cycles/sec, %lu apu_ev/fr %lu instr/sec elapsed=%lu ms" ENDL,
                (unsigned long)fps,
                (unsigned long)cpu_cycles_per_sec,
                (unsigned long)apu_cycles_per_sec,
+               (unsigned long)apu_events_per_frame,
                (unsigned long)apu_instructions_per_sec,
                (unsigned long)elapsed);
         bus.cpu.cpu_prefetcher.printStats();
@@ -810,6 +812,7 @@ extern "C" void task_nes_emu_main(void *argument)
                (unsigned long)bus.total_writes,
                (unsigned long)bus.ram_writes);
         printf("Cycles per frame: %lu" ENDL, (unsigned long)cycles_per_frame);
+        bus.cpu.apu.apu_events = 0;
         //DWT_Stats::Reset();
         //osDelay(10);
 #endif
@@ -999,8 +1002,27 @@ void My_LCD_TransferComplete(DMA_HandleTypeDef *hdma)
     //HAL_GPIO_WritePin(LCD_CS_GPIO_Port, LCD_CS_Pin, GPIO_PIN_SET);
 }
 
+// Import the linker symbols we defined
+extern uint32_t _siccmram;  // Source (Flash)
+extern uint32_t _sccmram;   // Destination (CCM RAM)
+extern uint32_t _eccmram;   // End (CCM RAM)
+
+void Copy_CCMRAM(void)
+{
+    uint32_t *src = &_siccmram;
+    uint32_t *dst = &_sccmram;
+    uint32_t *end = &_eccmram;
+
+    // Copy data from Flash to CCM RAM
+    while (dst < end) {
+        *dst++ = *src++;
+    }
+}
+
 extern "C" void init()
 {
+    Copy_CCMRAM();
+
 #if 1
     MX_USB_DEVICE_Init();
 

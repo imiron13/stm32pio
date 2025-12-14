@@ -38,7 +38,7 @@ public:
     void cpuWrite(uint16_t addr, uint8_t data);
     uint8_t cpuRead(uint16_t addr);
     force_inline bool clock();
-	void clock(uint32_t cycles) optimize_speed /*fast_code_section*/;
+	void clock(uint32_t cycles) optimize_speed /*CRITICAL_FUNCTION*/;
 	void updateNearestClockEvent();
     void resetChannels();
 	uint32_t getDmaBufferPos() { return dma->getReadPos(); }
@@ -50,6 +50,7 @@ public:
 	bool IRQ = false;
 	uint32_t buffer_index = 0;
 	uint32_t total_cycles __attribute__((used)) = 0;
+	uint32_t apu_events = 0;
 private:
 	static const uint32_t NTSC_CPU_FREQ = 1789773;
 	static const uint32_t INVALID_CYCLE = 0xFFFFFFFF;

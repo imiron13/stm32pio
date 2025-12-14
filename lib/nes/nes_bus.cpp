@@ -355,20 +355,20 @@ IRAM_ATTR void Bus::clock()
         cpu.apu.clock((113+114+114) / 2);
     }
     while (TIM1->CR1 & TIM_CR1_CEN);
-    cpu.apu.clock(80/2);
+    //cpu.apu.clock(80/2);
     // Setup for the next frame
     // Same reason as scanlines 0-239, 2/3 of scanlines will have an extra CPU clock. 
     // Scanline 240
-    cpu.clock(113);
+    //cpu.clock(113);
 
     // Scanline 241-261
     ppu.setVBlank();
     cpu.clock(2501);
 
     ppu.clearVBlank();
-    cpu.clock(114);
+    //cpu.clock(114);
     //cpu.apu.clock(338/2*240);
-    cpu.apu.clock((113+2501+114)/2);
+    cpu.apu.clock((2501 + 80)/2);
 
     if (frame_latch == 0) frame_latch = 1;
     else frame_latch = frame_latch - 1;
