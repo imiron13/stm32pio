@@ -171,7 +171,7 @@ void DMA1_Channel1_IRQHandler(void)
   /* USER CODE BEGIN DMA1_Channel1_IRQn 0 */
 
   /* USER CODE END DMA1_Channel1_IRQn 0 */
-  HAL_DMA_IRQHandler(&hdma_spi2_tx);
+  HAL_DMA_IRQHandler(&hdma_tim1_ch2);
   /* USER CODE BEGIN DMA1_Channel1_IRQn 1 */
 
   /* USER CODE END DMA1_Channel1_IRQn 1 */
@@ -194,36 +194,13 @@ void DMA1_Channel2_IRQHandler(void)
 /**
   * @brief This function handles DMA1 channel3 global interrupt.
   */
-void DMA1_Channel3_IRQHandler(void)
+void DMA2_Channel1_IRQHandler(void)
 {
   /* USER CODE BEGIN DMA1_Channel3_IRQn 0 */
 
   /* USER CODE END DMA1_Channel3_IRQn 0 */
-  //HAL_DMA_IRQHandler(&hdma_tim1_up);
+  HAL_DMA_IRQHandler(&hdma_spi2_tx);
   /* USER CODE BEGIN DMA1_Channel3_IRQn 1 */
-  HAL_DMA_IRQHandler(&hdma_tim1_ch2);
-  #if 0
-  /* USER CODE END DMA1_Channel3_IRQn 1 */
-/* 1. KILL THE TIMER IMMEDIATELY (Critical Section) */
-    /* Clearing the CEN bit stops the counter instantly */
-    TIM1->CR1 &= ~TIM_CR1_CEN; 
-
-    /* 2. Force the Output to High (Idle) State */
-    /* This ensures WR doesn't get stuck Low if we killed it mid-pulse */
-    /* Force OC1REF High: Set OC1M to 101 (Force Active) */
-    TIM1->CCMR1 |= TIM_CCMR1_OC1M_0 | TIM_CCMR1_OC1M_2;
-    TIM1->CCMR1 &= ~TIM_CCMR1_OC1M_1;
-
-    /* 3. Now clean up the DMA Flags (Standard procedure) */
-    /* Clear Global Interrupt Flag for Channel 1 */
-    DMA1->IFCR = DMA_IFCR_CGIF1; 
-
-    /* 4. Disable DMA Request on Timer to prevent accidental re-trigger */
-    TIM1->DIER &= ~TIM_DIER_UDE;
-    
-    /* 5. (Optional) Set CS High to end transaction safely */
-    //GPIOB->BSRR = GPIO_PIN_0; // Assuming CS is PB0
-    #endif
 }
 
 /**

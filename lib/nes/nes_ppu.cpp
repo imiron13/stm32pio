@@ -179,10 +179,11 @@ IRAM_ATTR void Ppu2C02::clearVBlank()
 
 IRAM_ATTR void Ppu2C02::renderScanline(uint16_t scanline)
 {
+    //fakeSpriteHit(scanline); return;
 
     transferScroll(scanline);
     renderBackground();
-    //fakeSpriteHit(scanline);
+    
     renderSprites(scanline);
     incrementY();
     finishScanline(scanline);
@@ -570,7 +571,6 @@ void Ppu2C02::fakeSpriteHit(uint16_t scanline)
 inline void Ppu2C02::finishScanline(uint16_t scanline)
 {
     memcpy(ptr_display + (scanline_counter * SCANLINE_SIZE), ptr_buffer, SCANLINE_SIZE * sizeof(uint16_t));
-    //memset(ptr_display + (scanline_counter * SCANLINE_SIZE), 0xC2, SCANLINE_SIZE * sizeof(uint16_t));
     scanline_counter++;
     if (scanline_counter >= SCANLINES_PER_BUFFER) 
     { 

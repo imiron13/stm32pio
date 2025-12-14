@@ -133,15 +133,15 @@ void HAL_I2S_MspInit(I2S_HandleTypeDef* hi2s)
 
     /* I2S2 DMA Init */
     /* SPI2_TX Init */
-    hdma_spi2_tx.Instance = DMA1_Channel1;
+    hdma_spi2_tx.Instance = DMA2_Channel1;
     hdma_spi2_tx.Init.Request = DMA_REQUEST_SPI2_TX;
     hdma_spi2_tx.Init.Direction = DMA_MEMORY_TO_PERIPH;
     hdma_spi2_tx.Init.PeriphInc = DMA_PINC_DISABLE;
     hdma_spi2_tx.Init.MemInc = DMA_MINC_ENABLE;
-    hdma_spi2_tx.Init.PeriphDataAlignment = DMA_PDATAALIGN_HALFWORD;
-    hdma_spi2_tx.Init.MemDataAlignment = DMA_MDATAALIGN_HALFWORD;
+    hdma_spi2_tx.Init.PeriphDataAlignment = DMA_PDATAALIGN_WORD;
+    hdma_spi2_tx.Init.MemDataAlignment = DMA_MDATAALIGN_WORD;
     hdma_spi2_tx.Init.Mode = DMA_NORMAL;
-    hdma_spi2_tx.Init.Priority = DMA_PRIORITY_HIGH;
+    hdma_spi2_tx.Init.Priority = DMA_PRIORITY_VERY_HIGH;
     if (HAL_DMA_Init(&hdma_spi2_tx) != HAL_OK)
     {
       Error_Handler();
@@ -352,7 +352,7 @@ void HAL_TIM_Base_MspInit(TIM_HandleTypeDef* htim_base)
 
     /* TIM1 DMA Init */
     /* TIM1_CH2 Init */
-    hdma_tim1_ch2.Instance = DMA1_Channel3;
+    hdma_tim1_ch2.Instance = DMA1_Channel1;
     hdma_tim1_ch2.Init.Request = DMA_REQUEST_TIM1_CH2;
     hdma_tim1_ch2.Init.Direction = DMA_MEMORY_TO_PERIPH;
     hdma_tim1_ch2.Init.PeriphInc = DMA_PINC_DISABLE;

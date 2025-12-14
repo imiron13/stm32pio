@@ -14,7 +14,7 @@
 using namespace std;
 
 #define IRAM_ATTR
-//#define FRAMESKIP
+#define FRAMESKIP
 
 Bus::Bus()
 {
@@ -253,13 +253,14 @@ void lcd_sync(uint32_t scanline)
         /* Ensure DMA isn't reading the half we just wrote to. */
         /* (Use your Get_DMA_Buf_Idx logic here if needed) */
         //setx(32, 32 + 255);
+        
     if (scanline % 2 == 0)
     {
-    HAL_DMA_Abort(htim1.hdma[TIM_DMA_ID_CC2]);
-    HAL_DMA_Start(htim1.hdma[TIM_DMA_ID_CC2], 
-                  g_buf_addr, 
-                  (uint32_t)&GPIOB->ODR, 
-                  SCANLINE_SIZE * SCANLINES_PER_BUFFER * 4);
+        HAL_DMA_Abort(htim1.hdma[TIM_DMA_ID_CC2]);
+        HAL_DMA_Start(htim1.hdma[TIM_DMA_ID_CC2], 
+                    g_buf_addr, 
+                    (uint32_t)&GPIOB->ODR, 
+                    SCANLINE_SIZE * SCANLINES_PER_BUFFER * 4);
     }
     HAL_GPIO_WritePin(ILI9341_CS_GPIO_Port, ILI9341_CS_Pin, GPIO_PIN_SET);
     for(volatile int i=0; i<5; i++); // Tiny delay
@@ -272,22 +273,24 @@ void lcd_sync(uint32_t scanline)
         
         /* Kick the Timer to send exactly 256 pixels */
         /* Because OPM is on, it will run 256 times, then clear CEN automatically. */
-        TIM1->CR1 |= TIM_CR1_CEN;
+    TIM1->CR1 |= TIM_CR1_CEN;
 }
 
 IRAM_ATTR void Bus::clock()
 {
-    g_buf_addr = (uint32_t)ppu.display_buffer;
-    ppu.write_buf_idx = 0;
-    ppu.ptr_display = ppu.display_buffer[1];
-    HAL_GPIO_WritePin(ILI9341_CS_GPIO_Port, ILI9341_CS_Pin, GPIO_PIN_RESET);
-    set_window();
+    if (frame_latch == 0) {
+        g_buf_addr = (uint32_t)ppu.display_buffer;
+        ppu.write_buf_idx = 0;
+        ppu.ptr_display = ppu.display_buffer[1];
+        HAL_GPIO_WritePin(ILI9341_CS_GPIO_Port, ILI9341_CS_Pin, GPIO_PIN_RESET);
+        set_window();
 
-    HAL_DMA_Abort(htim1.hdma[TIM_DMA_ID_CC2]);
-    HAL_DMA_Start(htim1.hdma[TIM_DMA_ID_CC2], 
-                  (uint32_t)ppu.display_buffer, 
-                  (uint32_t)&GPIOB->ODR, 
-                  SCANLINE_SIZE * SCANLINES_PER_BUFFER * 4);
+        HAL_DMA_Abort(htim1.hdma[TIM_DMA_ID_CC2]);
+        HAL_DMA_Start(htim1.hdma[TIM_DMA_ID_CC2], 
+                    (uint32_t)ppu.display_buffer, 
+                    (uint32_t)&GPIOB->ODR, 
+                    SCANLINE_SIZE * SCANLINES_PER_BUFFER * 4);
+    }
 
     // 1 frame == 341 dots * 261 scanlines
     // Visible scanlines 0-239
@@ -302,38 +305,57 @@ IRAM_ATTR void Bus::clock()
         ppu.renderScanline(ppu_scanline);
         if (ppu_scanline > 0)
             lcd_sync(ppu_scanline - 1);
-        #else
-            if (frame_latch) { while (Get_DMA_Remain() / (SCANLINE_SIZE * 2) == ppu.write_buf_idx);ppu.renderScanline(ppu_scanline); }
-            else { ppu.fakeSpriteHit(ppu_scanline); }
-        #endif
         if (ppu_scanline == 0)
         {
             CONFIGURE_BURST_MODE(256*2);
             lcd_sync(ppu_scanline);
         }
+        #else
+            if (frame_latch == 0) { 
+                ppu.renderScanline(ppu_scanline); 
+                if (ppu_scanline > 0)
+                    lcd_sync(ppu_scanline - 1);
+
+                if (ppu_scanline == 0)
+                {
+                    CONFIGURE_BURST_MODE(256*2);
+                    lcd_sync(ppu_scanline);
+                }
+            }
+            else { ppu.fakeSpriteHit(ppu_scanline); }
+        #endif
+
         cpu.clock(113);
+        //cpu.apu.clock(113/2);
 
         #ifndef FRAMESKIP
         ppu.renderScanline(ppu_scanline + 1);
         lcd_sync(ppu_scanline);
         #else
-            if (frame_latch) { while (Get_DMA_Remain() / (SCANLINE_SIZE * 2) == ppu.write_buf_idx);ppu.renderScanline(ppu_scanline + 1); }
+            if (frame_latch == 0) { 
+                ppu.renderScanline(ppu_scanline + 1); 
+                lcd_sync(ppu_scanline);
+            }
             else { ppu.fakeSpriteHit(ppu_scanline + 1); }
         #endif
         cpu.clock(114);
+        //cpu.apu.clock(114/2);
 
         #ifndef FRAMESKIP
         ppu.renderScanline(ppu_scanline + 2);
         lcd_sync(ppu_scanline + 1);
         #else
-            if (frame_latch) { while (Get_DMA_Remain() / (SCANLINE_SIZE * 2) == ppu.write_buf_idx); ppu.renderScanline(ppu_scanline + 2); }
+            if (frame_latch == 0) { 
+                ppu.renderScanline(ppu_scanline + 2); 
+                lcd_sync(ppu_scanline + 1);
+            }
             else { ppu.fakeSpriteHit(ppu_scanline + 2);  }
         #endif
         cpu.clock(114);
-        //cpu.apu.clock(338/2);
+        cpu.apu.clock((113+114+114) / 2);
     }
     while (TIM1->CR1 & TIM_CR1_CEN);
-
+    cpu.apu.clock(80/2);
     // Setup for the next frame
     // Same reason as scanlines 0-239, 2/3 of scanlines will have an extra CPU clock. 
     // Scanline 240
@@ -346,9 +368,10 @@ IRAM_ATTR void Bus::clock()
     ppu.clearVBlank();
     cpu.clock(114);
     //cpu.apu.clock(338/2*240);
-    //cpu.apu.clock((113+2501+114)/2);
+    cpu.apu.clock((113+2501+114)/2);
 
-    frame_latch = !frame_latch;
+    if (frame_latch == 0) frame_latch = 2;
+    else frame_latch = frame_latch - 1;
 }
 
 

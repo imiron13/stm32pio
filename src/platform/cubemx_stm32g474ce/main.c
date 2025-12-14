@@ -257,7 +257,7 @@ static void MX_I2S2_Init(void)
   hi2s2.Init.Standard = I2S_STANDARD_PHILIPS;
   hi2s2.Init.DataFormat = I2S_DATAFORMAT_16B;
   hi2s2.Init.MCLKOutput = I2S_MCLKOUTPUT_DISABLE;
-  hi2s2.Init.AudioFreq = I2S_AUDIOFREQ_44K/*I2S_AUDIOFREQ_22K*/;
+  hi2s2.Init.AudioFreq = /*I2S_AUDIOFREQ_44K*/I2S_AUDIOFREQ_22K;
   hi2s2.Init.CPOL = I2S_CPOL_LOW;
   if (HAL_I2S_Init(&hi2s2) != HAL_OK)
   {
@@ -369,7 +369,7 @@ static void MX_TIM1_Init(void)
   htim1.Instance = TIM1;
   htim1.Init.Prescaler = 0;
   htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim1.Init.Period = 12;
+  htim1.Init.Period = /*32*/ 22;
   htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim1.Init.RepetitionCounter = 0;
   htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
@@ -398,7 +398,7 @@ static void MX_TIM1_Init(void)
     Error_Handler();
   }
   sConfigOC.OCMode = TIM_OCMODE_PWM2;
-  sConfigOC.Pulse = 5;
+  sConfigOC.Pulse = /*11*/htim1.Init.Period / 2;
   sConfigOC.OCPolarity = /*TIM_OCPOLARITY_HIGH*/TIM_OCPOLARITY_LOW;
   sConfigOC.OCNPolarity = TIM_OCNPOLARITY_HIGH;
   sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
@@ -596,22 +596,21 @@ static void MX_USART1_UART_Init(void)
   */
 static void MX_DMA_Init(void)
 {
-
   /* DMA controller clock enable */
   __HAL_RCC_DMAMUX1_CLK_ENABLE();
+  __HAL_RCC_DMA2_CLK_ENABLE();
   __HAL_RCC_DMA1_CLK_ENABLE();
 
   /* DMA interrupt init */
   /* DMA1_Channel1_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 5, 0);
+  HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
   /* DMA1_Channel2_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(DMA1_Channel2_IRQn, 5, 0);
   HAL_NVIC_EnableIRQ(DMA1_Channel2_IRQn);
-
-  /* DMA1_Channel3_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Channel3_IRQn, 5, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Channel3_IRQn);
+  /* DMA2_Channel1_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA2_Channel1_IRQn, 5, 0);
+  HAL_NVIC_EnableIRQ(DMA2_Channel1_IRQn);
 }
 
 /**
