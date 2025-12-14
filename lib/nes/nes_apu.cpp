@@ -23,7 +23,7 @@ using namespace std;
 //#define SAMPLE_RATE 22050
 //#define SAMPLE_RATE 11025
 
-DMA_ATTR int16_t Apu2A03::audio_buffer[AUDIO_BUFFER_SIZE];
+sram2_section int16_t Apu2A03::audio_buffer[AUDIO_BUFFER_SIZE];
 
 Apu2A03::Apu2A03()
 {

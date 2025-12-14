@@ -370,7 +370,7 @@ IRAM_ATTR void Bus::clock()
     //cpu.apu.clock(338/2*240);
     cpu.apu.clock((113+2501+114)/2);
 
-    if (frame_latch == 0) frame_latch = 2;
+    if (frame_latch == 0) frame_latch = 1;
     else frame_latch = frame_latch - 1;
 }
 

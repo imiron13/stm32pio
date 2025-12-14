@@ -15,8 +15,12 @@ MEMORY
 {
   /* Flash: 512KB at 0x08000000 */
   FLASH (rx)      : ORIGIN = 0x08000000, LENGTH = 512K
-  /* RAM: 128KB at 0x20000000 (SRAM1 + SRAM2 + CCM Alias) */
-  RAM (xrw)       : ORIGIN = 0x20000000, LENGTH = 128K
+  
+  /* SRAM1: 96KB (Main RAM for stack, heap, video) */
+  RAM   (xrw)     : ORIGIN = 0x20000000, LENGTH = 96K
+  
+  /* SRAM2: 32KB (Dedicated for Audio DMA to avoid contention) */
+  RAM2  (xrw)     : ORIGIN = 0x20018000, LENGTH = 32K
 }
 
 /* Define output sections */
@@ -59,6 +63,44 @@ SECTIONS
   /* Initialized data sections goes into RAM, load LMA copy after code */
   _sidata = LOADADDR(.data);
 
+/* --- START OF ADDED SECTIONS --- */
+  
+  /* C++ Exception handling / Unwind info (Required for some STL/math functions) */
+  .ARM.extab   : { *(.ARM.extab* .gnu.linkonce.armextab.*) } >FLASH
+  .ARM : {
+    __exidx_start = .;
+    *(.ARM.exidx*)
+    __exidx_end = .;
+  } >FLASH
+
+  /* Pre-initialization array */
+  .preinit_array     :
+  {
+    PROVIDE_HIDDEN (__preinit_array_start = .);
+    KEEP (*(.preinit_array*))
+    PROVIDE_HIDDEN (__preinit_array_end = .);
+  } >FLASH
+
+  /* Initialization array (C++ Constructors) - CRITICAL FOR FIXING CRASH */
+  .init_array :
+  {
+    PROVIDE_HIDDEN (__init_array_start = .);
+    KEEP (*(SORT(.init_array.*)))
+    KEEP (*(.init_array*))
+    PROVIDE_HIDDEN (__init_array_end = .);
+  } >FLASH
+
+  /* Finalization array (Destructors) */
+  .fini_array :
+  {
+    PROVIDE_HIDDEN (__fini_array_start = .);
+    KEEP (*(SORT(.fini_array.*)))
+    KEEP (*(.fini_array*))
+    PROVIDE_HIDDEN (__fini_array_end = .);
+  } >FLASH
+
+  /* --- END OF ADDED SECTIONS --- */
+
   .data :
   {
     . = ALIGN(4);
@@ -83,6 +125,15 @@ SECTIONS
     __bss_end__ = _ebss;
   } >RAM
 
+/* Custom section to force Audio Buffer into SRAM2 */
+  .sram2_data :
+  {
+    . = ALIGN(4);
+    *(.sram2_data)
+    *(.sram2_data*)
+    . = ALIGN(4);
+  } >RAM2
+  
   /* User_heap_stack section, used to check that there is enough RAM left */
   ._user_heap_stack :
   {
