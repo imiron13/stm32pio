@@ -159,7 +159,16 @@ public:
     {
         hi2s2.hdmatx->Init.Mode = DMA_CIRCULAR;
         HAL_DMA_Init(hi2s2.hdmatx);
-        HAL_I2S_Transmit_DMA(&hi2s2, (uint16_t*)buffer, size);
+        //HAL_I2S_Transmit_DMA(&hi2s2, (uint16_t*)buffer, size);
+        //LL_DMA_SetPeriphAddress(DMAx, CH, (uint32_t)&SPIx->DR + 1);
+        HAL_DMA_Start(
+            hi2s2.hdmatx,
+            (uint32_t)buffer,              // uint8_t*
+            (uint32_t)&SPI2->DR + 1,        // HIGH BYTE
+            size                            // number of bytes
+        );
+        SET_BIT(hi2s2.Instance->CR2, SPI_CR2_TXDMAEN);
+        __HAL_I2S_ENABLE(&hi2s2);
     };
 
     virtual void stop() override
@@ -176,7 +185,7 @@ public:
 
     virtual uint32_t getReadPos() const override
     {
-        return AUDIO_BUFFER_SIZE - __HAL_DMA_GET_COUNTER(hi2s2.hdmatx);
+        return AUDIO_BUFFER_SIZE - __HAL_DMA_GET_COUNTER(hi2s2.hdmatx) / 2;
     };
 };
 
@@ -759,7 +768,7 @@ osThreadId_t task_handle_nes_emu_main;
 extern "C" void task_nes_emu_main(void *argument)
 {
 
-    audio_output.playBuffer(bus.cpu.apu.audio_buffer, AUDIO_BUFFER_SIZE);
+    audio_output.playBuffer(bus.cpu.apu.audio_buffer, AUDIO_BUFFER_SIZE*2);
     while (1)
     {
         __disable_irq();

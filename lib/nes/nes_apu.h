@@ -13,7 +13,7 @@
 
 using namespace std;
 
-#define AUDIO_BUFFER_SIZE (4*1024)
+#define AUDIO_BUFFER_SIZE (1*1024)
 
 class Bus;
 class Cpu6502;

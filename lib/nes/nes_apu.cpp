@@ -526,11 +526,13 @@ IRAM_ATTR void Apu2A03::generateSample()
 
 	if (val > 255) val = 255;
 
-	int16_t s16 = ((int16_t)val - 128) << 8;  // 8-bit unsigned -> signed 16-bit
+	//int16_t s16 = ((int16_t)val - 128) << 8;  // 8-bit unsigned -> signed 16-bit
+	uint8_t u8 = (uint8_t) ((int16_t)val - 128);
+	uint16_t u16 = ((uint32_t)u8 << 8) | u8;
 
-	audio_buffer[buffer_index + 0] = s16;  // Left
-	audio_buffer[buffer_index + 1] = s16;  // Right
-	buffer_index += 2;
+	audio_buffer[buffer_index + 0] = u16;  // Left
+	//audio_buffer[buffer_index + 1] = s16;  // Right
+	buffer_index++;
 
 	// Reset audio buffer index once filled
 	if (buffer_index >= AUDIO_BUFFER_SIZE) 
