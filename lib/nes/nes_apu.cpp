@@ -19,7 +19,7 @@ using namespace std;
 
 #define DMA_ATTR
 #define IRAM_ATTR
-#define SAMPLE_RATE 44100
+#define SAMPLE_RATE /*44100*/ 43904
 //#define SAMPLE_RATE 22050
 //#define SAMPLE_RATE 11025
 

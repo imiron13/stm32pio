@@ -176,7 +176,7 @@ public:
 
     virtual uint32_t getReadPos() const override
     {
-        return AUDIO_BUFFER_SIZE - __HAL_DMA_GET_COUNTER(hi2s2.hdmatx) * 2;
+        return AUDIO_BUFFER_SIZE - __HAL_DMA_GET_COUNTER(hi2s2.hdmatx);
     };
 };
 
@@ -759,7 +759,7 @@ osThreadId_t task_handle_nes_emu_main;
 extern "C" void task_nes_emu_main(void *argument)
 {
 
-    audio_output.playBuffer(bus.cpu.apu.audio_buffer, AUDIO_BUFFER_SIZE / 2);
+    audio_output.playBuffer(bus.cpu.apu.audio_buffer, AUDIO_BUFFER_SIZE);
     while (1)
     {
         __disable_irq();
