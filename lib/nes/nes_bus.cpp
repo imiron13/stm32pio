@@ -114,7 +114,7 @@ void spi_dma_init(void *data, size_t size)
 #endif
     /* 1. Set the Address of the GPIO B Output Data Register */
     /* Note: We cast to uint8_t* to enforce byte-width access */
-    uint32_t destination_address = (uint32_t)&GPIOB->ODR;
+    uint32_t destination_address = (uint32_t)&GPIOA->ODR;
 
     /* 2. Configure the DMA Source and Length */
     /* Note: Use the HAL or LL macro depending on your init */
@@ -259,7 +259,7 @@ void lcd_sync(uint32_t scanline)
         HAL_DMA_Abort(htim1.hdma[TIM_DMA_ID_CC2]);
         HAL_DMA_Start(htim1.hdma[TIM_DMA_ID_CC2], 
                     g_buf_addr, 
-                    (uint32_t)&GPIOB->ODR, 
+                    (uint32_t)&GPIOA->ODR, 
                     SCANLINE_SIZE * SCANLINES_PER_BUFFER * 4);
     }
     HAL_GPIO_WritePin(ILI9341_CS_GPIO_Port, ILI9341_CS_Pin, GPIO_PIN_SET);
@@ -288,7 +288,7 @@ IRAM_ATTR void Bus::clock()
         HAL_DMA_Abort(htim1.hdma[TIM_DMA_ID_CC2]);
         HAL_DMA_Start(htim1.hdma[TIM_DMA_ID_CC2], 
                     (uint32_t)ppu.display_buffer, 
-                    (uint32_t)&GPIOB->ODR, 
+                    (uint32_t)&GPIOA->ODR, 
                     SCANLINE_SIZE * SCANLINES_PER_BUFFER * 4);
     }
 

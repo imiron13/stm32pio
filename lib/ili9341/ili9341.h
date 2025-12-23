@@ -17,11 +17,11 @@
 #define ILI9341_SPI_PORT hspi1
 extern SPI_HandleTypeDef ILI9341_SPI_PORT;
 
-#define ILI9341_RES_Pin       GPIO_PIN_1
-#define ILI9341_RES_GPIO_Port GPIOA
+#define ILI9341_RES_Pin       GPIO_PIN_11
+#define ILI9341_RES_GPIO_Port GPIOC
 #define ILI9341_CS_Pin        GPIO_PIN_2
 #define ILI9341_CS_GPIO_Port  GPIOA
-#define ILI9341_DC_Pin        GPIO_PIN_0
+#define ILI9341_DC_Pin        GPIO_PIN_15
 #define ILI9341_DC_GPIO_Port  GPIOA
 
 #define ILI9341_WR_Pin        GPIO_PIN_8

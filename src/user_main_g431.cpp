@@ -1092,7 +1092,7 @@ extern "C" void init()
     LCD_WR_MODE_PWM();
     /* 1. Set the Address of the GPIO B Output Data Register */
     /* Note: We cast to uint8_t* to enforce byte-width access */
-    uint32_t destination_address = (uint32_t)&GPIOB->ODR;
+    uint32_t destination_address = (uint32_t)&GPIOA->ODR;
 
     /* 2. Configure the DMA Source and Length */
     /* Note: Use the HAL or LL macro depending on your init */

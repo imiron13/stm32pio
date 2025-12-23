@@ -19,7 +19,7 @@ static void ILI9341_Reset() {
 void ILI9341_WriteCommand(uint8_t cmd) {
     HAL_GPIO_WritePin(ILI9341_DC_GPIO_Port, ILI9341_DC_Pin, GPIO_PIN_RESET);
     HAL_GPIO_WritePin(ILI9341_WR_GPIO_Port, ILI9341_WR_Pin, GPIO_PIN_SET);
-    *(uint8_t*)&GPIOB->ODR = cmd;
+    *(uint8_t*)&GPIOA->ODR = cmd;
     HAL_GPIO_WritePin(ILI9341_WR_GPIO_Port, ILI9341_WR_Pin, GPIO_PIN_RESET);
     __NOP();__NOP();__NOP();__NOP();
     HAL_GPIO_WritePin(ILI9341_WR_GPIO_Port, ILI9341_WR_Pin, GPIO_PIN_SET);
@@ -36,7 +36,7 @@ void ILI9341_WriteData(uint8_t* buff, size_t buff_size) {
         //HAL_SPI_Transmit(&ILI9341_SPI_PORT, buff, chunk_size, HAL_MAX_DELAY);
         //buff += chunk_size;
         //buff_size -= chunk_size;
-        *(uint8_t*)&GPIOB->ODR = *buff++;
+        *(uint8_t*)&GPIOA->ODR = *buff++;
         HAL_GPIO_WritePin(ILI9341_WR_GPIO_Port, ILI9341_WR_Pin, GPIO_PIN_RESET);
         __NOP();__NOP();__NOP();__NOP();
         HAL_GPIO_WritePin(ILI9341_WR_GPIO_Port, ILI9341_WR_Pin, GPIO_PIN_SET);
