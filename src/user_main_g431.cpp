@@ -33,6 +33,8 @@
 #include "fonts.h"
 #include "ili9341.h"
 #include <keypad_4x1.h>
+#include <analog_stick.h>
+
 /*extern "C" {
 #include <eeprom_emul.h>
 }*/
@@ -55,6 +57,8 @@ using namespace std;
 #define EN_AUDIO_SHELL_CMDS                                 (0)
 #define EN_TETRIS                                           (0)
 
+extern ADC_HandleTypeDef hadc1;
+extern ADC_HandleTypeDef hadc2;
 extern UART_HandleTypeDef huart1;
 extern I2S_HandleTypeDef hi2s2;
 extern DMA_HandleTypeDef hdma_spi2_tx;
@@ -767,6 +771,30 @@ osThreadId_t task_handle_nes_emu_main;
 
 extern "C" void task_nes_emu_main(void *argument)
 {
+    // --- Calibration (Optional) ---
+    // Perform ADC calibration for better accuracy on G4 series
+    HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED);
+    HAL_ADCEx_Calibration_Start(&hadc2, ADC_SINGLE_ENDED);
+
+    // --- Driver Configuration ---
+    AnalogStickConfig joyConfig;
+    
+    // Configure X Axis (Using PB14 -> ADC1 Channel 5)
+    joyConfig.hAdcX = &hadc1;
+    joyConfig.channelX = ADC_CHANNEL_5;
+
+    // Configure Y Axis (Using PB2 -> ADC2 Channel 12)
+    // Note: If PB2 is on ADC1, simply change this to &hadc1 and the correct channel
+    joyConfig.hAdcY = &hadc2; 
+    joyConfig.channelY = ADC_CHANNEL_12; 
+
+    // Configure Button (PB6)
+    joyConfig.btnPort = GPIOB;
+    joyConfig.btnPin = GPIO_PIN_6;
+    joyConfig.deadzone = 150; // Slight deadzone to prevent drift
+
+    // Instantiate Driver
+    AnalogStick joystick(joyConfig);
 
     audio_output.playBuffer(bus.cpu.apu.audio_buffer, AUDIO_BUFFER_SIZE*2);
     while (1)
@@ -785,6 +813,29 @@ extern "C" void task_nes_emu_main(void *argument)
             bus.controller = 0x00;
             bus.controller |= (button1.is_pressed() ? Bus::CONTROLLER::Start : 0x00);
             bus.controller |= (button2.is_pressed() ? Bus::CONTROLLER::A : 0x00);
+            joystick.update();
+            float x = joystick.getX(); // Returns -1.0 to 1.0
+            float y = joystick.getY(); // Returns -1.0 to 1.0
+            if (joystick.isPressed())
+            {
+                bus.controller |= Bus::CONTROLLER::B;
+            }
+            if (x < -0.5f)
+            {
+                bus.controller |= Bus::CONTROLLER::Right;
+            }
+            else if (x > 0.5f)
+            {
+                bus.controller |= Bus::CONTROLLER::Left;
+            }
+            if (y < -0.5f)
+            {
+                bus.controller |= Bus::CONTROLLER::A;
+            }
+            else if (y > 0.5f)
+            {
+                bus.controller |= Bus::CONTROLLER::Down;
+            }
             /*bus.controller |= (keypad.button1().is_pressed() ? Bus::CONTROLLER::Left : 0x00);
             bus.controller |= (keypad.button2().is_pressed() ? Bus::CONTROLLER::Right : 0x00);
             bus.controller |= (keypad.button4().is_pressed() ? Bus::CONTROLLER::A : 0x00);
@@ -1033,15 +1084,15 @@ extern "C" void init()
     Copy_CCMRAM();
 
 #if 1
-    MX_USB_DEVICE_Init();
+    //MX_USB_DEVICE_Init();
 
     FILE *fuart1 = uart_fopen(&huart1);
     stdout = fuart1;
 
-    FILE *fusb_vcom = usb_vcom_fopen();
+    /*FILE *fusb_vcom = usb_vcom_fopen();
     stdout = fusb_vcom;
 
-    HAL_Delay(2000);  // delay for USB reconnect
+    HAL_Delay(2000); */ // delay for USB reconnect
 
     printf(BG_BLACK FG_BRIGHT_WHITE VT100_CLEAR_SCREEN VT100_CURSOR_HOME VT100_SHOW_CURSOR);
     printf(ENDL "Hello from %s (FreeRTOS)!" ENDL, MCU_NAME_STR);
