@@ -107,6 +107,7 @@ uint8_t UserTxBufferFS[APP_TX_DATA_SIZE];
   */
 
 extern USBD_HandleTypeDef hUsbDeviceFS;
+volatile uint8_t g_USB_Port_Open = 0;
 
 /* USER CODE BEGIN EXPORTED_VARIABLES */
 
@@ -228,8 +229,21 @@ static int8_t CDC_Control_FS(uint8_t cmd, uint8_t* pbuf, uint16_t length)
     break;
 
     case CDC_SET_CONTROL_LINE_STATE:
-
-    break;
+    /* pbuf[0] = 0x21 (bmRequest)
+         pbuf[1] = 0x22 (CDC_SET_CONTROL_LINE_STATE)
+         pbuf[2] = wValue Low Byte (Contains DTR and RTS)
+      */
+      
+      // Check Bit 0 of the 3rd byte
+      if (pbuf[2] & 0x01)
+      {
+          g_USB_Port_Open = 1; // DTR Present
+      }
+      else
+      {
+          g_USB_Port_Open = 0; // DTR Absent
+      }
+      break;
 
     case CDC_SEND_BREAK:
 

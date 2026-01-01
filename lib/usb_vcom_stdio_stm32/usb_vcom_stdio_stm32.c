@@ -4,10 +4,18 @@
 #include <usbd_cdc.h>
 #include <usbd_cdc_if.h>
 
+extern volatile uint8_t g_USB_Port_Open;
 
 ssize_t usb_vcom_write(void *husb, const char *ptr, size_t len)
 {
     UNUSED(husb);
+
+    // 1. Check if the terminal is actually open (DTR High)
+    if (g_USB_Port_Open == 0)
+    {
+        // Drop the data. Return OK so the rest of the application continues.
+        return USBD_OK; 
+    }
 
     int status;
     do {
