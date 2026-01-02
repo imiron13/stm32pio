@@ -41,8 +41,8 @@ public:
 	void clock(uint32_t cycles) optimize_speed /*CRITICAL_FUNCTION*/;
 	void updateNearestClockEvent();
     void resetChannels();
-	uint32_t getDmaBufferPos() { return dma->getReadPos(); }
-	uint32_t getBufferSpace() { return (getDmaBufferPos() - buffer_index) % AUDIO_BUFFER_SIZE; }
+	uint32_t getBufferSpace() { return (dma->getReadPos() - buffer_index) % AUDIO_BUFFER_SIZE; }
+	bool isBufferHalfFull() { return getBufferSpace() <= AUDIO_BUFFER_SIZE / 2; }
 	bool isBufferFull() { return getBufferSpace() <= 16; }
     static int16_t audio_buffer[AUDIO_BUFFER_SIZE];
 

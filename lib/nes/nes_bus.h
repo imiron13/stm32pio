@@ -55,6 +55,8 @@ private:
 class Bus
 {
 public:
+    uint32_t num_displayed_frames = 0;
+    uint32_t num_skipped_frames = 0;
     uint32_t total_reads = 0;
     uint32_t total_writes = 0;
     uint32_t ram_reads = 0;

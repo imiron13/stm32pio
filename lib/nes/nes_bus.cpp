@@ -278,6 +278,10 @@ void lcd_sync(uint32_t scanline)
 
 IRAM_ATTR void Bus::clock()
 {
+    frame_latch = !cpu.apu.isBufferHalfFull();
+    if (frame_latch == 0) num_displayed_frames++;
+    else num_skipped_frames++;
+
     if (frame_latch == 0) {
         g_buf_addr = (uint32_t)ppu.display_buffer;
         ppu.write_buf_idx = 0;
@@ -370,8 +374,8 @@ IRAM_ATTR void Bus::clock()
     //cpu.apu.clock(338/2*240);
     cpu.apu.clock((2501 + 80)/2);
 
-    if (frame_latch == 0) frame_latch = 1;
-    else frame_latch = frame_latch - 1;
+    //if (frame_latch == 0) frame_latch = 1;
+    //else frame_latch = frame_latch - 1;
 }
 
 

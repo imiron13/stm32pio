@@ -394,13 +394,15 @@ extern "C" void task_nes_emu_main(void *argument)
         bus.cpu.total_cycles = 0;
         bus.cpu.apu.total_cycles = 0;
         bus.cpu.total_instructions = 0;
-        printf("NES Emu: %lu fps, %lu cpu_cycles/sec, %lu apu_cycles/sec, %lu apu_ev/fr %lu instr/sec elapsed=%lu ms" ENDL,
+        printf("NES Emu: %lu fps, %lu cpu_cycles/sec, %lu apu_cycles/sec, %lu apu_ev/fr %lu instr/sec elapsed=%lu ms skip_fr=%lu" ENDL,
                (unsigned long)fps,
                (unsigned long)cpu_cycles_per_sec,
                (unsigned long)apu_cycles_per_sec,
                (unsigned long)apu_events_per_frame,
                (unsigned long)apu_instructions_per_sec,
-               (unsigned long)elapsed);
+               (unsigned long)elapsed,
+               (unsigned long)bus.num_skipped_frames
+               );
         bus.cpu.cpu_prefetcher.printStats();
         bus.cpu.cpu_prefetcher.resetStats();
         printf("Reads: %lu, ram_reads: %lu, Writes: %lu, ram_writes: %lu" ENDL,
@@ -410,6 +412,8 @@ extern "C" void task_nes_emu_main(void *argument)
                (unsigned long)bus.ram_writes);
         printf("Cycles per frame: %lu" ENDL, (unsigned long)cycles_per_frame);
         bus.cpu.apu.apu_events = 0;
+        bus.num_displayed_frames = 0;
+        bus.num_skipped_frames = 0;
         //DWT_Stats::Reset();
         //osDelay(10);
 #endif
