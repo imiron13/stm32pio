@@ -4,7 +4,7 @@
  *
  * Dependencies: 
  * - STM32 HAL for different families
- * - STM32_FAMILY_NAME_STR macro
+ * - STM32 FAMILY macro (F1/F2/F3/F4/F7/L0/L1/L4/G4)
  */
 
 #if F0

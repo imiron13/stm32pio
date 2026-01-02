@@ -62,7 +62,7 @@ public:
         GPIO_InitStruct.Pin = 1U << pin_id;
         GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
         GPIO_InitStruct.Pull = GPIO_NOPULL;
-        GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+        GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;  // TODO: add an option to configure speed
         HAL_GPIO_Init(gpio[port_id], &GPIO_InitStruct);
     }
 

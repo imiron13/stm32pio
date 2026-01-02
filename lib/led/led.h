@@ -13,10 +13,11 @@
 class Led_t
 {
     GpioPinInterface_t *m_gpio;
-    bool m_is_inverted_polarity;
+    bool m_is_active_low;
 public:
-    Led_t(GpioPinInterface_t *gpio, bool is_inverted_polarity);
+    Led_t(GpioPinInterface_t *gpio, bool is_active_low=false);
 
+    void init();
     void on();
     void off();
 };

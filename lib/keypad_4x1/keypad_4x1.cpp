@@ -25,11 +25,10 @@ void Keypad_4x1::init()
         m_gpio_common->write_low();
     }
 
-    m_gpio_button1->config_input(PULL_UP);
-    m_gpio_button2->config_input(PULL_UP);
-    m_gpio_button3->config_input(PULL_UP);
-    m_gpio_button4->config_input(PULL_UP);
-}
+    m_button1.init(true);
+    m_button2.init(true);
+    m_button3.init(true);
+    m_button4.init(true);}
 
 void Keypad_4x1::update()
 {
