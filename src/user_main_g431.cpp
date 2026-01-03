@@ -343,7 +343,7 @@ extern "C" void task_nes_emu_main(void *argument)
     audio_output.playBuffer(bus.cpu.apu.audio_buffer, AUDIO_BUFFER_SIZE*2);
     while (1)
     {
-        __disable_irq();
+        //__disable_irq();
         uint32_t time_start = DWT->CYCCNT;
         uint32_t elapsed;
         uint32_t frame __attribute__((used))= 0;
@@ -380,11 +380,14 @@ extern "C" void task_nes_emu_main(void *argument)
             {
                 bus.controller |= Bus::CONTROLLER::Down;
             }
+            shell.run();
         };
 #if 1
         //DWT_Stats::Print();
         elapsed = DWT->CYCCNT - time_start;
-        __enable_irq();
+        //__enable_irq();
+        
+        #if 0
         uint32_t cycles_per_frame = elapsed / frame;
         uint32_t fps = (SystemCoreClock + cycles_per_frame / 2) / cycles_per_frame;
         uint32_t cpu_cycles_per_sec = fps /** 29928*/ * ((114 + 113 + 114) * 80 + 2501) /*29781*/; // NTSC CPU cycles per frame
@@ -414,6 +417,7 @@ extern "C" void task_nes_emu_main(void *argument)
         bus.cpu.apu.apu_events = 0;
         bus.num_displayed_frames = 0;
         bus.num_skipped_frames = 0;
+        #endif
         //DWT_Stats::Reset();
         //osDelay(10);
 #endif
@@ -475,8 +479,6 @@ extern "C" void init()
     FILE *fusb_vcom = usb_vcom_fopen();
     stdout = fusb_vcom;
 
-    HAL_Delay(2000);  // delay for USB reconnect
-
     printf(BG_BLACK FG_BRIGHT_WHITE VT100_CLEAR_SCREEN VT100_CURSOR_HOME VT100_SHOW_CURSOR);
     printf(ENDL "Hello from %s (FreeRTOS)!" ENDL, MCU_NAME_STR);
 #ifdef DEBUG
@@ -486,6 +488,7 @@ extern "C" void init()
 #endif
     printf("SysClk = %ld KHz" ENDL, HAL_RCC_GetSysClockFreq() / 1000);
 #endif
+    init_shell(); 
 
     LCD_WR_MODE_GPIO();
     ILI9341_Init();
@@ -577,7 +580,7 @@ extern "C" void init()
     (void)status;
     audio_output.stop();*/
 
-    init_shell();  
+    init_shell(); 
 #endif
 
 }
