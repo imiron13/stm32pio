@@ -3,10 +3,10 @@
 #include <led.h>
 #include <button.h>
 
-GpioPinPortC_t<6> led1_gpio;
-GpioPinPortB_t<8> button1_gpio;
-GpioPinPortC_t<13> button2_gpio;
-DummyGpioPinAlwaysLow_t dummy_gpio;
+GpioPinPortC<6> led1_gpio;
+GpioPinPortB<8> button1_gpio;
+GpioPinPortC<13> button2_gpio;
+DummyGpioPinAlwaysLow dummy_gpio;
 
 Led_t led1(&led1_gpio, false);
 Led_t led2(&led1_gpio, false);

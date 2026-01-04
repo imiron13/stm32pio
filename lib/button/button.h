@@ -33,7 +33,7 @@ private:
 class DummyButton_t : public Button_t
 {
 public:
-    DummyGpioPinAlwaysLow_t m_dummy_gpio;
+    DummyGpioPinAlwaysLow m_dummy_gpio;
 
     DummyButton_t();
 };

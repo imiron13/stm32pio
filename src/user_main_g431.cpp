@@ -166,7 +166,6 @@ public:
     };
 };
 
-
 VgmPlayer vgm_player;
 Bus bus;
 I2S_AudioOutput audio_output;
@@ -490,8 +489,7 @@ extern "C" void init()
 #endif
     init_shell(); 
 
-    LCD_WR_MODE_GPIO();
-    ILI9341_Init();
+    Ili9341::init();
 
     bus.cpu.apu.connectDma(&audio_output);
     bus.cpu.connectBus(&bus);

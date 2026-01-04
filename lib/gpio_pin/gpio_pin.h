@@ -62,7 +62,19 @@ public:
 
     virtual void config_input(GpioPull_t pull=PULL_NONE)
     {
-        GPIO_PIN_TEMPLATE::config_input(pull);
+        if (pull == PULL_NONE)
+        {
+            GPIO_PIN_TEMPLATE::disable_pullup_pulldown();
+        }
+        else if (pull == PULL_UP)
+        {
+            GPIO_PIN_TEMPLATE::enable_pullup();
+        }
+        else // pull == PULL_DOWN
+        {
+            GPIO_PIN_TEMPLATE::enable_pulldown();
+        }
+        GPIO_PIN_TEMPLATE::config_input();        
     }
 };
 
@@ -72,10 +84,10 @@ GpioPin_t<GPIO_PIN_TEMPLATE>::GpioPin_t()
 {
 }
 
-class DummyGpioPinAlwaysLow_t : public GpioPinInterface_t
+class DummyGpioPinAlwaysLow : public GpioPinInterface_t
 {
 public:
-    DummyGpioPinAlwaysLow_t() {}
+    DummyGpioPinAlwaysLow() {}
 
     virtual void write(bool is_high)
     {

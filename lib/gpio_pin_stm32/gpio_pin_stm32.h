@@ -26,29 +26,35 @@ enum GpioPortId_t
 };
 
 template<GpioPortId_t port_id, int pin_id>
-class GpioPinTemplate_t
+class GpioPinTemplate
 {
     constexpr static GPIO_TypeDef *const gpio[7] = { GPIOA, GPIOB, GPIOC, GPIOD, GPIOE, GPIOF, GPIOG };
 public:
     static void write_high()
     {
-        write(true);
+        gpio[port_id]->BSRR = (1U << pin_id);
     }
 
     static void write_low()
     {
-        write(false);
+        gpio[port_id]->BRR = (1U << pin_id);
     }
 
     static void write(bool is_high)
     {
-        GPIO_PinState pin_state = (is_high ? GPIO_PIN_SET : GPIO_PIN_RESET);
-        HAL_GPIO_WritePin(gpio[port_id], 1U << pin_id, pin_state);
+        if (is_high)
+        {
+            write_high();
+        }
+        else
+        {
+            write_low();
+        }
     }
 
     static bool read()
     {
-        return HAL_GPIO_ReadPin(gpio[port_id], 1U << pin_id);
+        return (gpio[port_id]->IDR & (1U << pin_id)) != 0;
     }
 
     static bool is_high()
@@ -56,55 +62,95 @@ public:
         return read();
     }
 
-    static void config_output()
+    static void set_mode(uint32_t mode)
     {
-        GPIO_InitTypeDef GPIO_InitStruct = {0};
-        GPIO_InitStruct.Pin = 1U << pin_id;
-        GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-        GPIO_InitStruct.Pull = GPIO_NOPULL;
-        GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;  // TODO: add an option to configure speed
-        HAL_GPIO_Init(gpio[port_id], &GPIO_InitStruct);
+        gpio[port_id]->MODER &= ~(0x3U << (pin_id * 2));
+        gpio[port_id]->MODER |=  (mode << (pin_id * 2));
     }
 
-    static void config_input(GpioPull_t pull=PULL_NONE)
+    static void config_output()
     {
-        GPIO_InitTypeDef GPIO_InitStruct = {0};
-        GPIO_InitStruct.Pin = 1U << pin_id;
-        GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-        GPIO_InitStruct.Pull = GPIO_NOPULL;
-        if (pull == PULL_UP)
-        {
-            GPIO_InitStruct.Pull = GPIO_PULLUP;
-        }
-        else if (pull == PULL_DOWN)
-        {
-            GPIO_InitStruct.Pull = GPIO_PULLDOWN;
-        }
-        HAL_GPIO_Init(gpio[port_id], &GPIO_InitStruct);
+        set_mode(0x1U); // General purpose output mode
+    }
+
+    static void config_input()
+    {
+        set_mode(0x0U); // Input mode
+    }
+
+    static void config_alternate_function()
+    {
+        set_mode(0x2U); // Alternate function mode
+    }
+
+    static void enable_pullup()
+    {
+        gpio[port_id]->PUPDR &= ~(0x3U << (pin_id * 2));
+        gpio[port_id]->PUPDR |=  (0x1U << (pin_id * 2));
+    }
+
+    static void enable_pulldown()
+    {
+        gpio[port_id]->PUPDR &= ~(0x3U << (pin_id * 2));
+        gpio[port_id]->PUPDR |=  (0x2U << (pin_id * 2));
+    }
+
+    static void disable_pullup_pulldown()
+    {
+        gpio[port_id]->PUPDR &= ~(0x3U << (pin_id * 2));
     }
 };
 
 //template<int PIN_ID>
-//typedef GpioPin_t<GpioPinTemplate_t<GPIO_PORT_ID_A, PIN_ID>> GpioPinPortA_t;
-//typedef GpioPin_t<GpioPinTemplate_t<GPIO_PORT_ID_A, PIN_ID>> GpioPinPortA_t
+//typedef GpioPin_t<GpioPinTemplate<GPIO_PORT_ID_A, PIN_ID>> GpioPinPortA;
+//typedef GpioPin_t<GpioPinTemplate<GPIO_PORT_ID_A, PIN_ID>> GpioPinPortA
 
 template <size_t PIN_ID>
-using GpioPinPortA_t = GpioPin_t<GpioPinTemplate_t<GPIO_PORT_ID_A, PIN_ID>>;
+using GpioPinPortA = GpioPin_t<GpioPinTemplate<GPIO_PORT_ID_A, PIN_ID>>;
 
 template <size_t PIN_ID>
-using GpioPinPortB_t = GpioPin_t<GpioPinTemplate_t<GPIO_PORT_ID_B, PIN_ID>>;
+using GpioPinPortB = GpioPin_t<GpioPinTemplate<GPIO_PORT_ID_B, PIN_ID>>;
 
 template <size_t PIN_ID>
-using GpioPinPortC_t = GpioPin_t<GpioPinTemplate_t<GPIO_PORT_ID_C, PIN_ID>>;
+using GpioPinPortC = GpioPin_t<GpioPinTemplate<GPIO_PORT_ID_C, PIN_ID>>;
 
 template <size_t PIN_ID>
-using GpioPinPortD_t = GpioPin_t<GpioPinTemplate_t<GPIO_PORT_ID_D, PIN_ID>>;
+using GpioPinPortD = GpioPin_t<GpioPinTemplate<GPIO_PORT_ID_D, PIN_ID>>;
 
 template <size_t PIN_ID>
-using GpioPinPortE_t = GpioPin_t<GpioPinTemplate_t<GPIO_PORT_ID_E, PIN_ID>>;
+using GpioPinPortE = GpioPin_t<GpioPinTemplate<GPIO_PORT_ID_E, PIN_ID>>;
 
 template <size_t PIN_ID>
-using GpioPinPortF_t = GpioPin_t<GpioPinTemplate_t<GPIO_PORT_ID_F, PIN_ID>>;
+using GpioPinPortF = GpioPin_t<GpioPinTemplate<GPIO_PORT_ID_F, PIN_ID>>;
 
 template <size_t PIN_ID>
-using GpioPinPortG_t = GpioPin_t<GpioPinTemplate_t<GPIO_PORT_ID_G, PIN_ID>>;
+using GpioPinPortG = GpioPin_t<GpioPinTemplate<GPIO_PORT_ID_G, PIN_ID>>;
+
+template<GpioPortId_t port_id, int byte_index>
+class GpioPort8BitTemplate
+{
+    constexpr static GPIO_TypeDef *const gpio[7] = { GPIOA, GPIOB, GPIOC, GPIOD, GPIOE, GPIOF, GPIOG };
+public:
+    static void write(uint8_t data)
+    {
+        *((uint8_t*)&gpio[port_id]->ODR + byte_index) = data;
+    }
+};
+
+template<GpioPortId_t port_id>
+class GpioPort16BitTemplate
+{
+    constexpr static GPIO_TypeDef *const gpio[7] = { GPIOA, GPIOB, GPIOC, GPIOD, GPIOE, GPIOF, GPIOG };
+public:
+    static void write(uint16_t data)
+    {
+        *(uint16_t*)&gpio[port_id]->ODR = data;
+    }
+};
+
+using GpioPortA0_8Bit = GpioPort8BitTemplate<GPIO_PORT_ID_A, 0>;
+using GpioPortA8_8Bit = GpioPort8BitTemplate<GPIO_PORT_ID_A, 1>;
+using GpioPortA_16Bit = GpioPort16BitTemplate<GPIO_PORT_ID_A>;
+using GpioPortB0_8Bit = GpioPort8BitTemplate<GPIO_PORT_ID_B, 0>;
+using GpioPortB8_8Bit = GpioPort8BitTemplate<GPIO_PORT_ID_B, 1>;
+using GpioPortB_16Bit = GpioPort16BitTemplate<GPIO_PORT_ID_B>;

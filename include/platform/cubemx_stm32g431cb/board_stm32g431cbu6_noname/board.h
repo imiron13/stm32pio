@@ -4,10 +4,10 @@
 #include <led.h>
 #include <button.h>
 
-extern GpioPinPortC_t<6> led1_gpio;
-extern GpioPinPortB_t<8> button1_gpio;
-extern GpioPinPortC_t<13> button2_gpio;
-extern DummyGpioPinAlwaysLow_t dummy_gpio;
+extern GpioPinPortC<6> led1_gpio;
+extern GpioPinPortB<8> button1_gpio;
+extern GpioPinPortC<13> button2_gpio;
+extern DummyGpioPinAlwaysLow dummy_gpio;
 
 extern Led_t led1;
 extern Led_t led2;

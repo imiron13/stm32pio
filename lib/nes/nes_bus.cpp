@@ -83,111 +83,8 @@ void Bus::cpuReadBlock(uint16_t addr, uint32_t size, uint8_t* data)
     }
 }
 
-extern TIM_HandleTypeDef htim1;
-
-void spi_dma_init(void *data, size_t size)
-{
-#if 0    
-    // DMAMUX → SPI1_TX
-    LL_SPI_SetDataWidth(SPI1, LL_SPI_DATAWIDTH_16BIT);
-    LL_DMAMUX_SetRequestID(DMAMUX1, LL_DMAMUX_CHANNEL_1, LL_DMAMUX_REQ_SPI1_TX);
-
-    // DMA channel config (never changed)
-    LL_DMA_SetPeriphAddress(DMA1, LL_DMA_CHANNEL_2, (uint32_t)&SPI1->DR);
-    LL_DMA_SetMemoryAddress(DMA1, LL_DMA_CHANNEL_2, (uint32_t)data);
-    LL_DMA_SetDataLength(DMA1, LL_DMA_CHANNEL_2, size/2);
-
-    LL_DMA_SetDataTransferDirection(DMA1, LL_DMA_CHANNEL_2, LL_DMA_DIRECTION_MEMORY_TO_PERIPH);
-    LL_DMA_SetMemoryIncMode(DMA1, LL_DMA_CHANNEL_2, LL_DMA_MEMORY_INCREMENT);
-    LL_DMA_SetPeriphIncMode(DMA1, LL_DMA_CHANNEL_2, LL_DMA_PERIPH_NOINCREMENT);
-    LL_DMA_SetMemorySize(DMA1, LL_DMA_CHANNEL_2, LL_DMA_MDATAALIGN_HALFWORD);
-    LL_DMA_SetPeriphSize(DMA1, LL_DMA_CHANNEL_2, LL_DMA_PDATAALIGN_HALFWORD);
-    LL_DMA_SetChannelPriorityLevel(DMA1, LL_DMA_CHANNEL_2, LL_DMA_PRIORITY_HIGH);
-
-    // No interrupts
-    LL_DMA_DisableIT_TC(DMA1, LL_DMA_CHANNEL_2);
-    LL_DMA_DisableIT_TE(DMA1, LL_DMA_CHANNEL_2);
-
-    // SPI config done elsewhere
-    LL_SPI_Enable(SPI1);
-    LL_SPI_EnableDMAReq_TX(SPI1);
-#endif
-    /* 1. Set the Address of the GPIO B Output Data Register */
-    /* Note: We cast to uint8_t* to enforce byte-width access */
-    uint32_t destination_address = (uint32_t)&GPIOA->ODR;
-
-    /* 2. Configure the DMA Source and Length */
-    /* Note: Use the HAL or LL macro depending on your init */
-    /* Example using HAL_DMA_Start (But we need it linked to TIM1) */
-
-    // The standard HAL_TIM_PWM_Start_DMA won't work perfectly here 
-    // because it expects to transfer data TO the CCR register (Duty Cycle), 
-    // not to a GPIO.
-
-    // You must manually link the DMA to the External destination:
-    HAL_DMA_Start(htim1.hdma[TIM_DMA_ID_UPDATE], (uint32_t)data, destination_address, size);
-
-    // 3. Enable the TIM1 Update DMA Request
-    __HAL_TIM_ENABLE_DMA(&htim1, TIM_DMA_UPDATE);
-
-    // 4. Start the PWM (This starts the clock and triggers the DMA)
-    HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
-
-    // ... Wait for transfer complete ...
-
-    // 5. Stop everything
-    HAL_TIM_PWM_Stop(&htim1, TIM_CHANNEL_1);
-__HAL_TIM_DISABLE_DMA(&htim1, TIM_DMA_UPDATE);
-}
-
 #include "hal_wrapper_stm32.h"
 extern TIM_HandleTypeDef htim1;
-
-/* Returns the number of bytes the CPU can safely write before overwriting 
-   data that the DMA has not yet sent to the display. */
-inline uint32_t Get_DMA_Remain()
-{
-    return __HAL_DMA_GET_COUNTER(htim1.hdma[TIM_DMA_ID_UPDATE]);
-}
-
-uint32_t Get_DMA_Read_Ptr(uint32_t buffer_size)
-{
-    // 1. Get current DMA counter (Remaining items)
-    // Note: Use the Handle for the specific Channel you are using (TIM_UP)
-    uint32_t dma_remaining = __HAL_DMA_GET_COUNTER(htim1.hdma[TIM_DMA_ID_UPDATE]);
-    
-    // 2. Convert to absolute Index (0 to buffer_size - 1)
-    uint32_t dma_read_index = buffer_size - dma_remaining;
-    return dma_read_index;
-}
-
-uint32_t Get_DMA_Free_Space(uint32_t cpu_write_index, uint32_t buffer_size)
-{
-    // 1. Get current DMA counter (Remaining items)
-    // Note: Use the Handle for the specific Channel you are using (TIM_UP)
-    uint32_t dma_remaining = __HAL_DMA_GET_COUNTER(htim1.hdma[TIM_DMA_ID_UPDATE]);
-    
-    // 2. Convert to absolute Index (0 to buffer_size - 1)
-    uint32_t dma_read_index = buffer_size - dma_remaining;
-
-    // 3. Calculate distance
-    // Logic: (Read - Write + Size) % Size
-    // If Read > Write: Distance is the gap between them.
-    // If Write > Read: Distance is space to end + space from start to Read.
-    
-    uint32_t free_space = 0;
-    if (dma_read_index >= cpu_write_index) {
-        free_space = dma_read_index - cpu_write_index;
-    } else {
-        free_space = (buffer_size - cpu_write_index) + dma_read_index;
-    }
-
-    // 4. Safety Margin (Optional but Recommended)
-    // Keep at least 1-4 bytes gap so pointers don't overlap completely
-    if (free_space > 0) free_space--; 
-    
-    return free_space;
-}
 
 #include "ili9341.h"
 
@@ -217,25 +114,17 @@ uint32_t Get_DMA_Free_Space(uint32_t cpu_write_index, uint32_t buffer_size)
 
 void set_window()
 {
-    LCD_WR_MODE_GPIO();
-    ILI9341_SetAddressWindow(32, 0, 32 + 255, 239);
-    HAL_GPIO_WritePin(ILI9341_DC_GPIO_Port, ILI9341_DC_Pin, GPIO_PIN_SET);
-    LCD_WR_MODE_PWM();
-}
+    Ili9341::controlMode();
+    Ili9341::setAddressWindow(32, 0, 32 + 255, 239);
+    Ili9341::dmaMode();
+ }
 
 void setx(uint32_t x0, uint32_t x1)
 {
-    LCD_WR_MODE_GPIO();
-    ILI9341_WriteCommand(0x2A); // CASET
-    {
-        uint8_t data[] = { (x0 >> 8) & 0xFF, x0 & 0xFF, (x1 >> 8) & 0xFF, x1 & 0xFF };
-        ILI9341_WriteData(data, sizeof(data));
-    }
-
-    // write to RAM
-    ILI9341_WriteCommand(0x2C); // RAMWR
-    HAL_GPIO_WritePin(ILI9341_DC_GPIO_Port, ILI9341_DC_Pin, GPIO_PIN_SET);
-    LCD_WR_MODE_PWM();
+    Ili9341::controlMode();
+    Ili9341::setXWindow(x0, x1);
+    Ili9341::enableRamAccess();
+    Ili9341::dmaMode();
 }
 
 uint32_t g_buf_addr;
@@ -262,17 +151,15 @@ void lcd_sync(uint32_t scanline)
                     (uint32_t)&GPIOA->ODR, 
                     SCANLINE_SIZE * SCANLINES_PER_BUFFER * 4);
     }
-    HAL_GPIO_WritePin(ILI9341_CS_GPIO_Port, ILI9341_CS_Pin, GPIO_PIN_SET);
-    for(volatile int i=0; i<5; i++); // Tiny delay
-    HAL_GPIO_WritePin(ILI9341_CS_GPIO_Port, ILI9341_CS_Pin, GPIO_PIN_RESET);
-    LCD_WR_MODE_GPIO();
-    ILI9341_SetAddressWindow(32, scanline, 32 + 255, 239);
-    HAL_GPIO_WritePin(ILI9341_DC_GPIO_Port, ILI9341_DC_Pin, GPIO_PIN_SET);
-    LCD_WR_MODE_PWM();
-        /* --- FIRE PHASE --- */
-        
-        /* Kick the Timer to send exactly 256 pixels */
-        /* Because OPM is on, it will run 256 times, then clear CEN automatically. */
+    Ili9341::restartCs(10);
+    Ili9341::controlMode();
+    Ili9341::setAddressWindow(32, scanline, 32 + 255, 239);
+    Ili9341::dmaMode();
+
+    /* --- FIRE PHASE --- */
+    
+    /* Kick the Timer to send exactly 256 pixels */
+    /* Because OPM is on, it will run 256 times, then clear CEN automatically. */
     TIM1->CR1 |= TIM_CR1_CEN;
 }
 
@@ -286,7 +173,6 @@ IRAM_ATTR void Bus::clock()
         g_buf_addr = (uint32_t)ppu.display_buffer;
         ppu.write_buf_idx = 0;
         ppu.ptr_display = ppu.display_buffer[1];
-        HAL_GPIO_WritePin(ILI9341_CS_GPIO_Port, ILI9341_CS_Pin, GPIO_PIN_RESET);
         set_window();
 
         HAL_DMA_Abort(htim1.hdma[TIM_DMA_ID_CC2]);
