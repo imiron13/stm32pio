@@ -146,5 +146,4 @@ private:
     uint8_t *ram_page1 = &RAM[0x100]; // 0x0100-0x01FF stack page
     uint8_t controller_state;
     uint8_t controller_strobe = 0x00;    
-    uint8_t frame_latch = true;
 };

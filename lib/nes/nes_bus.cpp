@@ -14,7 +14,6 @@
 using namespace std;
 
 #define IRAM_ATTR
-#define FRAMESKIP
 
 Bus::Bus()
 {
@@ -87,10 +86,6 @@ void Bus::cpuReadBlock(uint16_t addr, uint32_t size, uint8_t* data)
 extern TIM_HandleTypeDef htim1;
 
 #include "ili9341.h"
-
-#define DISPLAY_PAUSE()   (TIM1->CR1 &= ~TIM_CR1_CEN)
-#define DISPLAY_RESUME()  (TIM1->CR1 |= TIM_CR1_CEN)
-
 
 /* Add this to your Initialization or Burst Macro */
 #define CONFIGURE_BURST_MODE(pixels) do { \
@@ -165,11 +160,11 @@ void lcd_sync(uint32_t scanline)
 
 IRAM_ATTR void Bus::clock()
 {
-    frame_latch = !cpu.apu.isBufferHalfFull();
-    if (frame_latch == 0) num_displayed_frames++;
+    bool frame_skip = !cpu.apu.isBufferHalfFull();
+    if (frame_skip == 0) num_displayed_frames++;
     else num_skipped_frames++;
 
-    if (frame_latch == 0) {
+    if (frame_skip == 0) {
         g_buf_addr = (uint32_t)ppu.display_buffer;
         ppu.write_buf_idx = 0;
         ppu.ptr_display = ppu.display_buffer[1];
@@ -191,56 +186,37 @@ IRAM_ATTR void Bus::clock()
     // 1 scanline == ~113.67 CPU clocks, so for every 3 scanlines, two scanlines will have an extra CPU clock
     for (ppu_scanline = 0; ppu_scanline < 240; ppu_scanline += 3)
     {
-        #ifndef FRAMESKIP
-        ppu.renderScanline(ppu_scanline);
-        if (ppu_scanline > 0)
-            lcd_sync(ppu_scanline - 1);
-        if (ppu_scanline == 0)
-        {
-            CONFIGURE_BURST_MODE(256*2);
-            lcd_sync(ppu_scanline);
-        }
-        #else
-            if (frame_latch == 0) { 
-                ppu.renderScanline(ppu_scanline); 
-                if (ppu_scanline > 0)
-                    lcd_sync(ppu_scanline - 1);
+        if (frame_skip == 0) { 
+            ppu.renderScanline(ppu_scanline); 
+            if (ppu_scanline > 0)
+                lcd_sync(ppu_scanline - 1);
 
-                if (ppu_scanline == 0)
-                {
-                    CONFIGURE_BURST_MODE(256*2);
-                    lcd_sync(ppu_scanline);
-                }
+            if (ppu_scanline == 0)
+            {
+                CONFIGURE_BURST_MODE(256*2);
+                lcd_sync(ppu_scanline);
             }
-            else { ppu.fakeSpriteHit(ppu_scanline); }
-        #endif
+        }
+        else { ppu.fakeSpriteHit(ppu_scanline); }
 
         cpu.clock(113);
         //cpu.apu.clock(113/2);
 
-        #ifndef FRAMESKIP
-        ppu.renderScanline(ppu_scanline + 1);
-        lcd_sync(ppu_scanline);
-        #else
-            if (frame_latch == 0) { 
-                ppu.renderScanline(ppu_scanline + 1); 
-                lcd_sync(ppu_scanline);
-            }
-            else { ppu.fakeSpriteHit(ppu_scanline + 1); }
-        #endif
+        if (frame_skip == 0) { 
+            ppu.renderScanline(ppu_scanline + 1); 
+            lcd_sync(ppu_scanline);
+        }
+        else { ppu.fakeSpriteHit(ppu_scanline + 1); }
+
         cpu.clock(114);
         //cpu.apu.clock(114/2);
 
-        #ifndef FRAMESKIP
-        ppu.renderScanline(ppu_scanline + 2);
-        lcd_sync(ppu_scanline + 1);
-        #else
-            if (frame_latch == 0) { 
-                ppu.renderScanline(ppu_scanline + 2); 
-                lcd_sync(ppu_scanline + 1);
-            }
-            else { ppu.fakeSpriteHit(ppu_scanline + 2);  }
-        #endif
+        if (frame_skip == 0) { 
+            ppu.renderScanline(ppu_scanline + 2); 
+            lcd_sync(ppu_scanline + 1);
+        }
+        else { ppu.fakeSpriteHit(ppu_scanline + 2);  }
+
         cpu.clock(114);
         cpu.apu.clock((113+114+114) / 2);
     }
@@ -259,9 +235,6 @@ IRAM_ATTR void Bus::clock()
     //cpu.clock(114);
     //cpu.apu.clock(338/2*240);
     cpu.apu.clock((2501 + 80)/2);
-
-    //if (frame_latch == 0) frame_latch = 1;
-    //else frame_latch = frame_latch - 1;
 }
 
 

@@ -286,6 +286,18 @@ bool shell_cmd_led(FILE *f, ShellCmd_t *cmd, const char *s)
     return true;
 }
 
+bool shell_cmd_info(FILE *f, ShellCmd_t *cmd, const char *s)
+{
+    printf(ENDL "Hello from %s (FreeRTOS)!" ENDL, MCU_NAME_STR);
+#ifdef DEBUG
+    printf("DEBUG=1, build time: " __TIME__ ENDL);
+#else
+    printf("DEBUG=0, build time: " __TIME__ ENDL);
+#endif
+    printf("SysClk = %ld KHz" ENDL, HAL_RCC_GetSysClockFreq() / 1000);
+    return true;
+}
+
 bool shell_cmd_play_nes_chiptune(FILE *f, ShellCmd_t *cmd, const char *s)
 {
     fprintf(f, "Playing nes chiptune..." ENDL);
@@ -305,6 +317,8 @@ void init_shell(FILE *device=stdout)
 {
     shell.add_command(ShellCmd_t("cls", "Clear screen", shell_cmd_clear_screen));
     shell.add_command(ShellCmd_t("led", "LED control", shell_cmd_led));
+    shell.add_command(ShellCmd_t("info", "System information", shell_cmd_info));
+    
     shell.set_device(device);
     shell.print_prompt();
 }
