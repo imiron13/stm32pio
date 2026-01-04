@@ -11,7 +11,7 @@ using namespace std;
 DMA_ATTR uint16_t Ppu2C02::display_buffer[2][SCANLINE_SIZE * SCANLINES_PER_BUFFER];
 uint16_t* Ppu2C02::ptr_display = Ppu2C02::display_buffer[1];
 
-static constexpr inline uint16_t swap2(uint16_t c) { return (uint16_t)( ((c & 0x001F) << 11) | (c & 0x07E0) | ((c >> 11) & 0x001F) ); }
+//static constexpr inline uint16_t swap2(uint16_t c) { return (uint16_t)( ((c & 0x001F) << 11) | (c & 0x07E0) | ((c >> 11) & 0x001F) ); }
 static constexpr inline uint16_t swap_rb(uint16_t c) { return ((c & 0xFF) << 8) | (c >> 8); }
 //static constexpr inline uint16_t swap_rb(uint16_t c) { return c; }
 //static constexpr inline uint16_t swap_rb(uint16_t c) { return swap2(c); }

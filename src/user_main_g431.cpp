@@ -489,7 +489,7 @@ extern "C" void init()
 #endif
     init_shell(); 
 
-    Ili9341::init();
+    Ili9341::init(Ili9341::Orientation::LANDSCAPE, Ili9341::ColorFormat::BGR565);
 
     bus.cpu.apu.connectDma(&audio_output);
     bus.cpu.connectBus(&bus);

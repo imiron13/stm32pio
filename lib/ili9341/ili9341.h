@@ -1,50 +1,11 @@
-/* vim: set ai et ts=4 sw=4: */
-#ifndef __ILI9341_H__
-#define __ILI9341_H__
+#pragma once
 
 #include "fonts.h"
 #include <stdbool.h>
 #include <gpio_pin_stm32.h>
 
-#define ILI9341_MADCTL_MY  0x80
-#define ILI9341_MADCTL_MX  0x40
-#define ILI9341_MADCTL_MV  0x20
-#define ILI9341_MADCTL_ML  0x10
-#define ILI9341_MADCTL_RGB 0x00
-#define ILI9341_MADCTL_BGR 0x08
-#define ILI9341_MADCTL_MH  0x04
-
-/*** Redefine if necessary ***/
-
-// default orientation
-#define ILI9341_WIDTH  240
-#define ILI9341_HEIGHT 320
-//#define ILI9341_ROTATION (ILI9341_MADCTL_MX | ILI9341_MADCTL_BGR)
-#define ILI9341_ROTATION (ILI9341_MADCTL_MV | ILI9341_MADCTL_BGR)
-
-// rotate right
-/*
-#define ILI9341_WIDTH  320
-#define ILI9341_HEIGHT 240
-#define ILI9341_ROTATION (ILI9341_MADCTL_MX | ILI9341_MADCTL_MY | ILI9341_MADCTL_MV | ILI9341_MADCTL_BGR)
-*/
-
-// rotate left
-/*
-#define ILI9341_WIDTH  320
-#define ILI9341_HEIGHT 240
-#define ILI9341_ROTATION (ILI9341_MADCTL_MV | ILI9341_MADCTL_BGR)
-*/
-
-// upside down
-/*
-#define ILI9341_WIDTH  240
-#define ILI9341_HEIGHT 320
-#define ILI9341_ROTATION (ILI9341_MADCTL_MY | ILI9341_MADCTL_BGR)
-*/
 
 /****************************/
-
 // Color definitions
 #define	ILI9341_BLACK   0x0000
 #define	ILI9341_BLUE    0x001F
@@ -54,7 +15,6 @@
 #define ILI9341_MAGENTA 0xF81F
 #define ILI9341_YELLOW  0xFFE0
 #define ILI9341_WHITE   0xFFFF
-#define ILI9341_COLOR565(r, g, b) (((r & 0xF8) << 8) | ((g & 0xFC) << 3) | ((b & 0xF8) >> 3))
 
 template<class BUS, class GPIO_DC, class GPIO_WR, class GPIO_RESET, class GPIO_CS, uint32_t WSTRB_DELAY>
 class Ili9341_lowLevelInterface_8bitParallel
@@ -125,8 +85,111 @@ public:
 template<class LL_IF>
 class Ili9341_driver
 {
+    enum class Command
+    {
+        NOP = 0x00,
+        SOFTWARE_RESET = 0x01,
+        READ_DISPLAY_ID = 0x04,
+        READ_DISPLAY_STATUS = 0x09,
+        READ_DISPLAY_POWER_MODE = 0x0A,
+        READ_DISPLAY_MADCTL = 0x0B,
+        READ_DISPLAY_PIXEL_FORMAT = 0x0C,
+        READ_DISPLAY_IMAGE_FORMAT = 0x0D,
+        READ_DISPLAY_SIGNAL_MODE = 0x0E,
+        READ_DISPLAY_SELF_DIAGNOSTIC_RESULT = 0x0F,
+        ENTER_SLEEP_MODE = 0x10,
+        EXIT_SLEEP_MODE = 0x11,
+        PARTIAL_MODE_ON = 0x12,
+        NORMAL_DISPLAY_MODE_ON = 0x13,
+        INVERT_DISPLAY_OFF = 0x20,
+        INVERT_DISPLAY_ON = 0x21,
+        GAMMA_SET = 0x26,
+        DISPLAY_OFF = 0x28,
+        DISPLAY_ON = 0x29,
+        COLUMN_ADDRESS_SET = 0x2A,
+        ROW_ADDRESS_SET = 0x2B,
+        MEMORY_WRITE = 0x2C,
+        MEMORY_READ = 0x2E,
+        PARTIAL_AREA = 0x30,
+        VERTICAL_SCROLLING_DEFINITION = 0x33,
+        TEARING_EFFECT_LINE_OFF = 0x34,
+        TEARING_EFFECT_LINE_ON = 0x35,
+        MEMORY_ACCESS_CONTROL = 0x36,
+        VERTICAL_SCROLLING_START_ADDRESS = 0x37,
+        IDLE_MODE_OFF = 0x38,
+        IDLE_MODE_ON = 0x39,
+        PIXEL_FORMAT_SET = 0x3A,
+        WRITE_MEMORY_CONTINUE = 0x3C,
+        READ_MEMORY_CONTINUE = 0x3E,
+        SET_TEAR_SCANLINE = 0x44,
+        GET_SCANLINE = 0x45,
+        WRITE_DISPLAY_BRIGHTNESS = 0x51,
+        READ_DISPLAY_BRIGHTNESS = 0x52,
+        WRITE_CTRL_DISPLAY = 0x53,
+        READ_CTRL_DISPLAY = 0x54,
+        WRITE_CONTENT_ADAPTIVE_BRIGHTNESS_CONTROL = 0x55,
+        READ_CONTENT_ADAPTIVE_BRIGHTNESS_CONTROL = 0x56,
+        WRITE_CABC_MIN_BRIGHTNESS = 0x5E,
+        READ_CABC_MIN_BRIGHTNESS = 0x5F,
+        POWER_CONTROL_A = 0xCB,
+        POWER_CONTROL_B = 0xCF,
+        POSITIVE_GAMMA_CORRECTION = 0xE0,
+        NEGATIVE_GAMMA_CORRECTION = 0xE1,
+        DRIVER_TIMING_CONTROL_A = 0xE8,
+        DRIVER_TIMING_CONTROL_B = 0xEA,
+        POWER_ON_SEQUENCE_CONTROL = 0xED,
+        PUMP_RATIO_CONTROL = 0xF7,
+        POWER_CONTROL_1 = 0xC0,
+        POWER_CONTROL_2 = 0xC1,
+        VCM_CONTROL_1 = 0xC5,
+        VCM_CONTROL_2 = 0xC7,
+        MEMORY_ACCESS_CONTROL_2 = 0xB1,
+        FRAME_RATE_CONTROL_NORMAL = 0xB2,
+        FRAME_RATE_CONTROL_IDLE = 0xB3,
+        DISPLAY_INVERSION_CONTROL = 0xB4,
+        BLANKING_PORCH_CONTROL = 0xB5,
+        DISPLAY_FUNCTION_CONTROL = 0xB6,
+        ENTRY_MODE_SET = 0xB7,
+        READ_ID1 = 0xDA,
+        READ_ID2 = 0xDB,
+        READ_ID3 = 0xDC
+    };
+
+    enum MadCtlFlags : uint8_t
+    {
+        MADCTL_MY = 0x80,
+        MADCTL_MX = 0x40,
+        MADCTL_MV = 0x20,
+        MADCTL_ML = 0x10,
+        MADCTL_RGB = 0x00,
+        MADCTL_BGR = 0x08,
+        MADCTL_MH = 0x04
+    };
+
+    static void writeCommand(Command cmd, bool doSelect=true);
+
 public:
-    static void init();
+    enum class ColorFormat
+    {
+        RGB565,
+        BGR565
+    };
+
+    enum class DisplayMode
+    {
+        NORMAL,
+        INVERTED
+    };
+
+    enum class Orientation
+    {
+        PORTRAIT,
+        LANDSCAPE,
+        PORTRAIT_FLIPPED,
+        LANDSCAPE_FLIPPED
+    };
+
+    static void init(Orientation orientation = Orientation::PORTRAIT, ColorFormat color_format = ColorFormat::RGB565);
     static void drawPixel(uint16_t x, uint16_t y, uint16_t color);
     static void fillRectangle(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t color);
     static void fillScreen(uint16_t color);
@@ -141,6 +204,9 @@ public:
     static void dmaMode();
     static void controlMode();
     static void restartCs(uint32_t pulse_width_clk);
+
+    static constexpr uint16_t colorRgb565(uint8_t r, uint8_t g, uint8_t b);
+    static constexpr uint16_t colorBgr565(uint8_t r, uint8_t g, uint8_t b);
 };
 
 template<class LL_IF>
@@ -159,6 +225,12 @@ void Ili9341_driver<LL_IF>::controlMode()
 }
 
 template<class LL_IF>
+void Ili9341_driver<LL_IF>::writeCommand(Command cmd, bool doSelect)
+{
+    LL_IF::writeCommand(static_cast<uint8_t>(cmd), doSelect);
+}
+
+template<class LL_IF>
 void Ili9341_driver<LL_IF>::restartCs(uint32_t pulse_width_clk)
 {
     LL_IF::unselect();
@@ -167,7 +239,19 @@ void Ili9341_driver<LL_IF>::restartCs(uint32_t pulse_width_clk)
 }
 
 template<class LL_IF>
-void Ili9341_driver<LL_IF>::init()
+constexpr uint16_t Ili9341_driver<LL_IF>::colorRgb565(uint8_t r, uint8_t g, uint8_t b)
+{
+    return (uint16_t)( ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | ((b & 0xF8) >> 3) );
+}
+
+template<class LL_IF>
+constexpr uint16_t Ili9341_driver<LL_IF>::colorBgr565(uint8_t r, uint8_t g, uint8_t b)
+{
+    return (uint16_t)( ((b & 0xF8) << 8) | ((g & 0xFC) << 3) | ((r & 0xF8) >> 3) );
+}
+
+template<class LL_IF>
+void Ili9341_driver<LL_IF>::init(Orientation orientation, ColorFormat color_format)
 {
     const uint32_t RESET_PULSE_MS = 5;
     LL_IF::controlMode();
@@ -176,148 +260,150 @@ void Ili9341_driver<LL_IF>::init()
 
     // command list is based on https://github.com/martnak/STM32-ILI9341
 
-    // SOFTWARE RESET
-    LL_IF::writeCommand(0x01);
+    writeCommand(Command::SOFTWARE_RESET);
     HAL_Delay(1000);
         
-    // POWER CONTROL A
-    LL_IF::writeCommand(0xCB);
+    writeCommand(Command::POWER_CONTROL_A);
     {
         uint8_t data[] = { 0x39, 0x2C, 0x00, 0x34, 0x02 };
         LL_IF::writeData(data, sizeof(data));
     }
 
-    // POWER CONTROL B
-    LL_IF::writeCommand(0xCF);
+    writeCommand(Command::POWER_CONTROL_B);
     {
         uint8_t data[] = { 0x00, 0xC1, 0x30 };
         LL_IF::writeData(data, sizeof(data));
     }
 
-    // DRIVER TIMING CONTROL A
-    LL_IF::writeCommand(0xE8);
+    writeCommand(Command::DRIVER_TIMING_CONTROL_A);
     {
         uint8_t data[] = { 0x85, 0x00, 0x78 };
         LL_IF::writeData(data, sizeof(data));
     }
 
-    // DRIVER TIMING CONTROL B
-    LL_IF::writeCommand(0xEA);
+    writeCommand(Command::DRIVER_TIMING_CONTROL_B);
     {
         uint8_t data[] = { 0x00, 0x00 };
         LL_IF::writeData(data, sizeof(data));
     }
 
-    // POWER ON SEQUENCE CONTROL
-    LL_IF::writeCommand(0xED);
+    writeCommand(Command::POWER_ON_SEQUENCE_CONTROL);
     {
         uint8_t data[] = { 0x64, 0x03, 0x12, 0x81 };
         LL_IF::writeData(data, sizeof(data));
     }
 
-    // PUMP RATIO CONTROL
-    LL_IF::writeCommand(0xF7);
+    writeCommand(Command::PUMP_RATIO_CONTROL);
     {
         uint8_t data[] = { 0x20 };
         LL_IF::writeData(data, sizeof(data));
     }
 
-    // POWER CONTROL,VRH[5:0]
-    LL_IF::writeCommand(0xC0);
+    writeCommand(Command::POWER_CONTROL_1);
     {
         uint8_t data[] = { 0x23 };
         LL_IF::writeData(data, sizeof(data));
     }
 
-    // POWER CONTROL,SAP[2:0];BT[3:0]
-    LL_IF::writeCommand(0xC1);
+    writeCommand(Command::POWER_CONTROL_2);
     {
         uint8_t data[] = { 0x10 };
         LL_IF::writeData(data, sizeof(data));
     }
 
-    // VCM CONTROL
-    LL_IF::writeCommand(0xC5);
+    writeCommand(Command::VCM_CONTROL_1);
     {
         uint8_t data[] = { 0x3E, 0x28 };
         LL_IF::writeData(data, sizeof(data));
     }
 
-    // VCM CONTROL 2
-    LL_IF::writeCommand(0xC7);
+    writeCommand(Command::VCM_CONTROL_2);
     {
         uint8_t data[] = { 0x86 };
         LL_IF::writeData(data, sizeof(data));
     }
 
-    // MEMORY ACCESS CONTROL
-    LL_IF::writeCommand(0x36);
+    writeCommand(Command::MEMORY_ACCESS_CONTROL);
     {
         uint8_t data[] = { 0x48 };
         LL_IF::writeData(data, sizeof(data));
     }
 
-    // PIXEL FORMAT
-    LL_IF::writeCommand(0x3A);
+    writeCommand(Command::PIXEL_FORMAT_SET);
     {
         uint8_t data[] = { 0x55 };
         LL_IF::writeData(data, sizeof(data));
     }
 
     // FRAME RATIO CONTROL, STANDARD RGB COLOR
-    LL_IF::writeCommand(0xB1);
+    writeCommand(static_cast<Command>(0xB1));
     {
         uint8_t data[] = { 0x00, 0x18 };
         LL_IF::writeData(data, sizeof(data));
     }
 
-    // DISPLAY FUNCTION CONTROL
-    LL_IF::writeCommand(0xB6);
+    writeCommand(Command::DISPLAY_FUNCTION_CONTROL);
     {
         uint8_t data[] = { 0x08, 0x82, 0x27 };
         LL_IF::writeData(data, sizeof(data));
     }
 
     // 3GAMMA FUNCTION DISABLE
-    LL_IF::writeCommand(0xF2);
+    writeCommand(static_cast<Command>(0xF2));
     {
         uint8_t data[] = { 0x00 };
         LL_IF::writeData(data, sizeof(data));
     }
 
-    // GAMMA CURVE SELECTED
-    LL_IF::writeCommand(0x26);
+    writeCommand(Command::GAMMA_SET);
     {
         uint8_t data[] = { 0x01 };
         LL_IF::writeData(data, sizeof(data));
     }
 
-    // POSITIVE GAMMA CORRECTION
-    LL_IF::writeCommand(0xE0);
+    writeCommand(Command::POSITIVE_GAMMA_CORRECTION);
     {
         uint8_t data[] = { 0x0F, 0x31, 0x2B, 0x0C, 0x0E, 0x08, 0x4E, 0xF1,
                            0x37, 0x07, 0x10, 0x03, 0x0E, 0x09, 0x00 };
         LL_IF::writeData(data, sizeof(data));
     }
 
-    // NEGATIVE GAMMA CORRECTION
-    LL_IF::writeCommand(0xE1);
+    writeCommand(Command::NEGATIVE_GAMMA_CORRECTION);
     {
         uint8_t data[] = { 0x00, 0x0E, 0x14, 0x03, 0x11, 0x07, 0x31, 0xC1,
                            0x48, 0x08, 0x0F, 0x0C, 0x31, 0x36, 0x0F };
         LL_IF::writeData(data, sizeof(data));
     }
 
-    // EXIT SLEEP
-    LL_IF::writeCommand(0x11);
+    writeCommand(Command::EXIT_SLEEP_MODE);
     HAL_Delay(120);
 
-    // TURN ON DISPLAY
-    LL_IF::writeCommand(0x29);
-    // MADCTL
-    LL_IF::writeCommand(0x36);
+    writeCommand(Command::DISPLAY_ON);
+
+    writeCommand(Command::MEMORY_ACCESS_CONTROL);
     {
-        uint8_t data[] = { ILI9341_ROTATION };
+        uint8_t madctl = 0x00;
+        switch (orientation)
+        {
+            case Orientation::PORTRAIT:
+                madctl = MADCTL_MX;
+                break;
+            case Orientation::LANDSCAPE:
+                madctl = MADCTL_MV;
+                break;
+            case Orientation::PORTRAIT_FLIPPED:
+                madctl = MADCTL_MY;
+                break;
+            case Orientation::LANDSCAPE_FLIPPED:
+                madctl = MADCTL_MX | MADCTL_MY | MADCTL_MV;
+                break;
+        }
+        if (color_format == ColorFormat::BGR565) {
+            madctl |= MADCTL_BGR;
+        } else {
+            madctl |= MADCTL_RGB;
+        }
+        uint8_t data[] = { madctl };
         LL_IF::writeData(data, sizeof(data));
     }
 
@@ -335,8 +421,7 @@ void Ili9341_driver<LL_IF>::setAddressWindow(uint16_t x0, uint16_t y0, uint16_t 
 template<class LL_IF>
 void Ili9341_driver<LL_IF>::setXWindow(uint16_t x0, uint16_t x1)
 {
-    // column address set
-    LL_IF::writeCommand(0x2A); // CASET
+    writeCommand(Command::COLUMN_ADDRESS_SET);
     {
         uint8_t data[] = { (x0 >> 8) & 0xFF, x0 & 0xFF, (x1 >> 8) & 0xFF, x1 & 0xFF };
         LL_IF::writeData(data, sizeof(data));
@@ -346,8 +431,7 @@ void Ili9341_driver<LL_IF>::setXWindow(uint16_t x0, uint16_t x1)
 template<class LL_IF>
 void Ili9341_driver<LL_IF>::setYWindow(uint16_t y0, uint16_t y1)
 {
-    // row address set
-    LL_IF::writeCommand(0x2B); // RASET
+    writeCommand(Command::ROW_ADDRESS_SET);
     {
         uint8_t data[] = { (y0 >> 8) & 0xFF, y0 & 0xFF, (y1 >> 8) & 0xFF, y1 & 0xFF };
         LL_IF::writeData(data, sizeof(data));
@@ -357,8 +441,7 @@ void Ili9341_driver<LL_IF>::setYWindow(uint16_t y0, uint16_t y1)
 template<class LL_IF>
 void Ili9341_driver<LL_IF>::enableRamAccess()
 {
-    // write to RAM
-    LL_IF::writeCommand(0x2C); // RAMWR
+    writeCommand(Command::MEMORY_WRITE);
 }
 
 template<class LL_IF>
@@ -394,4 +477,3 @@ void Ili9341_driver<LL_IF>::writeString(uint16_t x, uint16_t y, const char* str,
 
 #include "ili9341_config.h"
 
-#endif // __ILI9341_H__
