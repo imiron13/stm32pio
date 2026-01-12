@@ -118,7 +118,7 @@ void setx(uint32_t x0, uint32_t x1)
 {
     Ili9341::controlMode();
     Ili9341::setXWindow(x0, x1);
-    Ili9341::enableRamAccess();
+    Ili9341::memoryWrite();
     Ili9341::dmaMode();
 }
 

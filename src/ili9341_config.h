@@ -9,3 +9,5 @@ const uint32_t Ili9341_wstrb_delay_clk = 4;
 
 using Ili9341_lowLevelInterface = Ili9341_lowLevelInterface_8bitParallel<Ili9341_bus, Ili9341_dcPin, Ili9341_wrPin, Ili9341_resetPin, Ili9341_csPin, Ili9341_wstrb_delay_clk>;
 using Ili9341 = Ili9341_driver<Ili9341_lowLevelInterface>;
+
+using Ili9341_Color = ColorConverter<ColorFormatRgb565>;

@@ -98,11 +98,19 @@ IRAM_ATTR void Cpu6502::OAM_Write(uint8_t addr, uint8_t data)
     bus->OAM_Write(addr, data);
 }
 
+void Cpu6502::clockUntilRts()
+{
+    uint32_t sp = SP;
+    while (true)
+    {
+        clock(1);
+        if (SP > sp)
+            break;
+    }
+}
+
 void Cpu6502::clock(int i)
 {
-    //__disable_irq();
-
-
     total_cycles += i;
     for (int remaining_cycles = i; remaining_cycles > 0; remaining_cycles--)
     {
@@ -113,12 +121,6 @@ void Cpu6502::clock(int i)
         cycles = instr_cycles[opcode];
         additional_cycle1 = 0;
         additional_cycle2 = 0;
-
-        /*if (SP == 0x00 || SP == 0xFF)
-        {
-            // Prevent stack overflow crash on BRK when SP is 0x00
-            return;
-        }*/
 
         //total_instructions++;
         /*if (en_bkpt && PC - 1u == bkpt)
@@ -419,7 +421,6 @@ void Cpu6502::clock(int i)
             break;
         }
     }
-    //__enable_irq();
 }
 
 void Cpu6502::reset()
@@ -429,7 +430,7 @@ void Cpu6502::reset()
 	uint8_t high_byte = read(addr_abs + 1);
 
 	PC = (high_byte << 8) | low_byte;
-    printf("CPU Reset. PC set to: %04X" ENDL, PC);
+    //printf("CPU Reset. PC set to: %04X" ENDL, PC);
 	A = 0;
 	X = 0;
 	Y = 0;

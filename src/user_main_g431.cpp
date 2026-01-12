@@ -34,6 +34,7 @@
 #include "ili9341.h"
 #include <keypad_4x1.h>
 #include <analog_stick.h>
+#include "xmodem.h"
 
 using namespace std;
 
@@ -54,6 +55,9 @@ extern TIM_HandleTypeDef htim2;
 extern TIM_HandleTypeDef htim3;
 
 Shell_t shell;
+
+#define MAX_FILE_SIZE (33 * 1024)
+uint8_t romBuffer[MAX_FILE_SIZE];
 
 //extern const uint8_t _binary_Unchained_vgm_start;
 //extern const unsigned int _binary_Unchained_vgm_size;
@@ -108,7 +112,7 @@ extern const unsigned int _binary_tanks_nes_size;
 
 #define NSF_ROM   ((uint8_t*)&_binary_tanks_nes_start)
 #define NSF_ROM_SIZE  ((unsigned int)&_binary_tanks_nes_size)*/
-
+uint32_t loadedRomSize = 0;
 
 Cartridge nes_cart(NSF_ROM, NSF_ROM_SIZE, false);
 #else
@@ -298,18 +302,145 @@ bool shell_cmd_info(FILE *f, ShellCmd_t *cmd, const char *s)
     return true;
 }
 
-bool shell_cmd_play_nes_chiptune(FILE *f, ShellCmd_t *cmd, const char *s)
+bool shell_cmd_host_read(FILE *f, ShellCmd_t *cmd, const char *s)
 {
-    fprintf(f, "Playing nes chiptune..." ENDL);
-    //audio_output.playBuffer(apu.audio_buffer, AUDIO_BUFFER_SIZE);
+    const char *filename = cmd->get_str_arg(s, 1);
+    XModem xmodem(stdout);
 
-    /*VgmPlayer::Status status = vgm_player.play(&_binary_sample_vgm_start,
-                                              (size_t)&_binary_sample_vgm_size,
-                                              apu,
-                                              stdout);*/
+    xmodem.RequestFile(filename);
+
+    uint32_t size = 0;
+    bool success = xmodem.Receive([&](uint8_t* data, size_t len) -> bool {
+        if (size + len > MAX_FILE_SIZE) return false;
+        
+        memcpy(&romBuffer[size], data, len);
+        size += len;
+        return true;
+    });
+
+    if (success) {
+        printf("\r\nTransfer Successful (%u bytes)\r\n", size);
+        loadedRomSize = size;
+        return true;
+    } else {
+        printf("\r\nTransfer Failed\r\n");
+        return false;
+    }
+}
+
+bool shell_cmd_play_vgm_chiptune(FILE *f, ShellCmd_t *cmd, const char *s)
+{
+    fprintf(f, "Playing VGM chiptune..." ENDL);
+    audio_output.playBuffer(bus.cpu.apu.audio_buffer, AUDIO_BUFFER_SIZE*2);
+
+    VgmPlayer::Status status = vgm_player.play(&romBuffer[0],
+                                              loadedRomSize,
+                                              bus.cpu.apu,
+                                              stdout);
     audio_output.stop();                                  
-    //(void)status;
+    (void)status;
 
+    return true;
+}
+
+void apuInit()
+{
+    //bus.cpu.apu.connectBus(&bus);
+    //bus.cpu.apu.connectCPU(&bus.cpu);
+
+    array<uint8_t, 20> initialRegisters = {
+        0x30, 0x08, 0x00, 0x00, // Pulse 1
+        0x30, 0x08, 0x00, 0x00, // Pulse 2
+        0x80, 0x00, 0x00, 0x00, // Triangle
+        0x30, 0x00, 0x00, 0x00, // Noise
+        0x00, 0x00, 0x00, 0x00 // DMC
+    };
+    for (size_t i = 0; i < initialRegisters.size(); i++) {
+        bus.cpu.apu.cpuWrite(0x4000 + i, initialRegisters[i]);
+    }
+    // Enable all channels
+    bus.cpu.apu.cpuWrite(0x4015, 0x0F);
+    bus.cpu.apu.cpuWrite(0x4017, 0x40);
+}  
+
+bool shell_cmd_play_nsf_chiptune(FILE *f, ShellCmd_t *cmd, const char *s)
+{
+    const uint32_t NSF_HEADER_SIZE = 0x80;
+    fprintf(f, "Playing NSF chiptune..." ENDL);
+    uint8_t *nsf_data = &romBuffer[0];
+    size_t nsf_size = loadedRomSize;
+
+    uint32_t loadAddr = ((uint16_t*)nsf_data)[4];
+    uint32_t initFuncAddr = ((uint16_t*)nsf_data)[5];
+    uint32_t playFuncAddr = ((uint16_t*)nsf_data)[6];
+    uint32_t songCount = ((uint8_t*)nsf_data)[6];
+    uint32_t firstSong = ((uint8_t*)nsf_data)[7];
+    uint32_t songNo = firstSong;
+    uint32_t periodInUsecsNtsc = ((uint16_t*)nsf_data)[0x37];
+    uint32_t periodInUsecsPal = ((uint16_t*)nsf_data)[0x3C];
+    bool isDualNtscPal = (((uint8_t*)nsf_data)[0x7A] & 0x02) != 0;
+    bool isPal = (((uint8_t*)nsf_data)[0x7A] & 0x01) != 0;
+    bool isNtsc = isDualNtscPal || !isPal;
+    uint32_t periodInUsecs = isNtsc ? periodInUsecsNtsc : periodInUsecsPal;
+    Cartridge cart(nsf_data, nsf_size, true, loadAddr);
+    bus.insertCartridge(&cart);
+    audio_output.playBuffer(bus.cpu.apu.audio_buffer, AUDIO_BUFFER_SIZE*2);
+    uint32_t apuClksPerFrame = (uint64_t)894886 * periodInUsecs / 1000000;  // /*18623*50/60=15519, 14914*/
+    bool loadNewSong = true;
+
+    while (true)
+    {
+        if (loadNewSong)
+        {
+            loadNewSong = false;
+            bus.reset();
+            apuInit();
+            bus.cpu.PC = initFuncAddr;
+            bus.cpu.A = songNo - 1;
+            bus.cpu.X = isNtsc ? 0 : 1;
+            bus.cpu.clockUntilRts();
+        }
+
+        bus.cpu.PC = playFuncAddr;
+        bus.cpu.SP = 0xFD;
+        bus.cpu.clockUntilRts();
+        bus.cpu.apu.clock(apuClksPerFrame);
+
+        button1.update();
+        button2.update();
+        //keypad.update();
+
+        int shell_keypress = fgetc(f);
+        if (shell_keypress == 'q' || shell_keypress == 'Q')
+        {
+            break;
+        }
+
+        if (button1.is_pressed_event() || shell_keypress == 'n' || shell_keypress == 'N')
+        {
+            songNo++;
+            if (songNo > songCount)
+            {
+                songNo = firstSong;
+            }
+            loadNewSong = true;
+        }
+
+        if (button2.is_pressed_event() || shell_keypress == 'p' || shell_keypress == 'P')
+        {
+            if (songNo == firstSong)
+            {
+                songNo = songCount;
+            }
+            else
+            {
+                songNo--;
+            }
+            loadNewSong = true;
+        }
+    }
+
+    audio_output.stop();                                  
     return true;
 }
 
@@ -318,7 +449,9 @@ void init_shell(FILE *device=stdout)
     shell.add_command(ShellCmd_t("cls", "Clear screen", shell_cmd_clear_screen));
     shell.add_command(ShellCmd_t("led", "LED control", shell_cmd_led));
     shell.add_command(ShellCmd_t("info", "System information", shell_cmd_info));
-    
+    shell.add_command(ShellCmd_t("hifrd", "Read a file from the host", shell_cmd_host_read));
+    shell.add_command(ShellCmd_t("vgm", "Play VGM chiptune from received file", shell_cmd_play_vgm_chiptune));
+    shell.add_command(ShellCmd_t("nsf", "Play NSF chiptune from received file", shell_cmd_play_nsf_chiptune));
     shell.set_device(device);
     shell.print_prompt();
 }
@@ -438,28 +571,6 @@ extern "C" void task_nes_emu_main(void *argument)
 
 }
 
-void apuInit()
-{
-    //bus.cpu.apu.connectBus(&bus);
-    //bus.cpu.apu.connectCPU(&bus.cpu);
-
-    array<uint8_t, 20> initialRegisters = {
-        0x30, 0x08, 0x00, 0x00, // Pulse 1
-        0x30, 0x08, 0x00, 0x00, // Pulse 2
-        0x80, 0x00, 0x00, 0x00, // Triangle
-        0x30, 0x00, 0x00, 0x00, // Noise
-        0x00, 0x00, 0x00, 0x00 // DMC
-    };
-    for (size_t i = 0; i < initialRegisters.size(); i++) {
-        bus.cpu.apu.cpuWrite(0x4000 + i, initialRegisters[i]);
-    }
-    // Enable all channels
-    bus.cpu.apu.cpuWrite(0x4015, 0x0F);
-    bus.cpu.apu.cpuWrite(0x4017, 0x40);
-}   
-
-const uint32_t NSF_HEADER_SIZE = 0x80;
-
 extern TIM_HandleTypeDef htim1;
 
 // Import the linker symbols we defined
@@ -503,7 +614,10 @@ extern "C" void init()
 #endif
     init_shell(); 
 
-    Ili9341::init(Ili9341::Orientation::LANDSCAPE, Ili9341::ColorFormat::BGR565);
+    Ili9341::init(Ili9341::Orientation::LANDSCAPE);
+    /*Ili9341::fillScreen(Ili9341_Color::RED);
+    Ili9341::fillScreen(Ili9341_Color::GREEN);
+    Ili9341::fillScreen(Ili9341_Color::BLUE);*/
 
     bus.cpu.apu.connectDma(&audio_output);
     bus.cpu.connectBus(&bus);
@@ -512,7 +626,14 @@ extern "C" void init()
     DWT_Stats::Init();
     DWT_Stats::Start();
 
-#if 1
+    task_nes_emu_main(NULL);
+    while (1)
+    {
+        shell.run();
+        HAL_Delay(10);
+        //osDelay(1);
+    }
+#if 0
     osThreadAttr_t nesEmuMainTask_attributes = { };
     nesEmuMainTask_attributes.name = "task_nes_emu_main";
     nesEmuMainTask_attributes.stack_size = 256 * 4;
@@ -520,79 +641,6 @@ extern "C" void init()
 
     task_handle_nes_emu_main = osThreadNew(task_nes_emu_main, NULL, &nesEmuMainTask_attributes);
 
-#else
-    uint32_t loadAddr = ((uint16_t*)NSF_ROM)[4];
-    uint32_t initFuncAddr = ((uint16_t*)NSF_ROM)[5];
-    uint32_t playFuncAddr = ((uint16_t*)NSF_ROM)[6];
-    uint32_t songCount = ((uint8_t*)NSF_ROM)[6];
-    uint32_t firstSong = ((uint8_t*)NSF_ROM)[7];
-    uint32_t songNo = firstSong;
-    uint32_t periodInUsecsNtsc = ((uint16_t*)NSF_ROM)[0x37];
-    uint32_t periodInUsecsPal = ((uint16_t*)NSF_ROM)[0x3C];
-    bool isDualNtscPal = (((uint8_t*)NSF_ROM)[0x7A] & 0x02) != 0;
-    bool isPal = (((uint8_t*)NSF_ROM)[0x7A] & 0x01) != 0;
-    bool isNtsc = isDualNtscPal || !isPal;
-    uint32_t periodInUsecs = isNtsc ? periodInUsecsNtsc : periodInUsecsPal;
-    //nes_cart.addMemory(loadAddr, ((uint8_t*)NSF_ROM) + NSF_HEADER_SIZE, NSF_ROM_SIZE - NSF_HEADER_SIZE);
-    audio_output.playBuffer(bus.cpu.apu.audio_buffer, AUDIO_BUFFER_SIZE);
-    uint32_t apuClksPerFrame = (uint64_t)894886 * periodInUsecs / 1000000;  // /*18623*50/60=15519, 14914*/
-    bool loadNewSong = true;
-
-    while (true)
-    {
-        if (loadNewSong)
-        {
-            loadNewSong = false;
-            bus.reset();
-            apuInit();
-            //bus.cpu.reset();
-            bus.cpu.PC = initFuncAddr;
-            bus.cpu.A = songNo - 1;
-            bus.cpu.X = isNtsc ? 0 : 1;
-            bus.cpu.clock(100000);
-        }
-
-        bus.cpu.PC = playFuncAddr;
-        bus.cpu.SP = 0xFD;
-        bus.cpu.clock(100000);
-        bus.cpu.apu.clock(apuClksPerFrame);
-
-        button1.update();
-        button2.update();
-        //keypad.update();
-
-        if (button1.is_pressed_event())
-        {
-            songNo++;
-            if (songNo > songCount)
-            {
-                songNo = firstSong;
-            }
-            loadNewSong = true;
-        }
-
-        if (button2.is_pressed_event())
-        {
-            if (songNo == firstSong)
-            {
-                songNo = songCount;
-            }
-            else
-            {
-                songNo--;
-            }
-            loadNewSong = true;
-        }
-    }
-
-    /*VgmPlayer::Status status = vgm_player.play(&_binary_sample_vgm_start,
-                                              (size_t)&_binary_sample_vgm_size,
-                                              apu,
-                                              stdout);
-    (void)status;
-    audio_output.stop();*/
-
-    init_shell(); 
 #endif
 
 }

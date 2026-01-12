@@ -4,18 +4,48 @@
 #include <stdbool.h>
 #include <gpio_pin_stm32.h>
 
+//******************************************************************************
+// Color format
+//******************************************************************************
+class ColorFormatRgb565
+{
+public:
+    static constexpr uint16_t get(uint8_t r, uint8_t g, uint8_t b)
+    {
+        return (uint16_t)( ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | ((b & 0xF8) >> 3) );
+    }
+};
+class ColorFormatBgr565
+{
+public:
+    static constexpr uint16_t get(uint8_t r, uint8_t g, uint8_t b)
+    {
+        return (uint16_t)( ((b & 0xF8) << 8) | ((g & 0xFC) << 3) | ((r & 0xF8) >> 3) );
+    }
+};
 
-/****************************/
-// Color definitions
-#define	ILI9341_BLACK   0x0000
-#define	ILI9341_BLUE    0x001F
-#define	ILI9341_RED     0xF800
-#define	ILI9341_GREEN   0x07E0
-#define ILI9341_CYAN    0x07FF
-#define ILI9341_MAGENTA 0xF81F
-#define ILI9341_YELLOW  0xFFE0
-#define ILI9341_WHITE   0xFFFF
+template<class COLOR_FORMAT>
+class ColorConverter
+{
+public:
+    static constexpr uint16_t color(uint8_t r, uint8_t g, uint8_t b)
+    {
+        return COLOR_FORMAT::get(r, g, b);
+    }
 
+    constexpr static uint16_t BLACK = color(0, 0, 0);
+    constexpr static uint16_t BLUE = color(0, 0, 255);
+    constexpr static uint16_t RED = color(255, 0, 0);
+    constexpr static uint16_t GREEN = color(0, 255, 0);
+    constexpr static uint16_t CYAN = color(0, 255, 255);
+    constexpr static uint16_t MAGENTA = color(255, 0, 255);
+    constexpr static uint16_t YELLOW = color(255, 255, 0);
+    constexpr static uint16_t WHITE = color(255, 255, 255);
+};
+
+//******************************************************************************
+// Low-level interface
+//******************************************************************************
 template<class BUS, class GPIO_DC, class GPIO_WR, class GPIO_RESET, class GPIO_CS, uint32_t WSTRB_DELAY>
 class Ili9341_lowLevelInterface_8bitParallel
 {
@@ -81,10 +111,14 @@ public:
     }
 };
 
-
+//******************************************************************************
+// ILI9341 driver
+//******************************************************************************
 template<class LL_IF>
 class Ili9341_driver
 {
+    static constexpr bool COLOR_FILTER_BGR = true;  // set to true if LCD uses BGR color filter panel, false for RGB
+
     enum class Command
     {
         NOP = 0x00,
@@ -168,6 +202,9 @@ class Ili9341_driver
 
     static void writeCommand(Command cmd, bool doSelect=true);
 
+    static inline uint32_t s_width = 0;
+    static inline uint32_t s_height = 0;
+
 public:
     enum class ColorFormat
     {
@@ -189,24 +226,29 @@ public:
         LANDSCAPE_FLIPPED
     };
 
-    static void init(Orientation orientation = Orientation::PORTRAIT, ColorFormat color_format = ColorFormat::RGB565);
-    static void drawPixel(uint16_t x, uint16_t y, uint16_t color);
-    static void fillRectangle(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t color);
-    static void fillScreen(uint16_t color);
-    static void drawImage(uint16_t x, uint16_t y, uint16_t w, uint16_t h, const uint16_t* data);
-    static void invertColors(bool invert);
-    static void setAddressWindow(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1);
-    static void setXWindow(uint16_t x0, uint16_t x1);
-    static void setYWindow(uint16_t y0, uint16_t y1);
-    static void enableRamAccess();
-    static void writeString(uint16_t x, uint16_t y, const char* str, FontDef font, uint16_t color, uint16_t bgcolor);
+    static void init(Orientation orientation = Orientation::PORTRAIT, ColorFormat color_format=ColorFormat::RGB565);
+    static uint32_t getWidth() { return s_width; }
+    static uint32_t getHeight() { return s_height; }
 
+    // Interface control
     static void dmaMode();
     static void controlMode();
     static void restartCs(uint32_t pulse_width_clk);
 
-    static constexpr uint16_t colorRgb565(uint8_t r, uint8_t g, uint8_t b);
-    static constexpr uint16_t colorBgr565(uint8_t r, uint8_t g, uint8_t b);
+    // Low-level commands
+    static void setAddressWindow(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1);
+    static void setXWindow(uint16_t x0, uint16_t x1);
+    static void setYWindow(uint16_t y0, uint16_t y1);
+    static void memoryWrite();
+    static void invertColors(bool invert);
+
+    // Drawing functions
+    static void drawPixel(uint16_t x, uint16_t y, uint16_t color);
+    static void fillRectangle(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t color);
+    static void fillScreen(uint16_t color);
+    static void drawImage(uint16_t x, uint16_t y, uint16_t w, uint16_t h, const uint16_t* data);
+    static void writeChar(uint16_t x, uint16_t y, char ch, FontDef font, uint16_t color, uint16_t bgcolor);
+    static void writeString(uint16_t x, uint16_t y, const char* str, FontDef font, uint16_t color, uint16_t bgcolor);
 };
 
 template<class LL_IF>
@@ -236,18 +278,6 @@ void Ili9341_driver<LL_IF>::restartCs(uint32_t pulse_width_clk)
     LL_IF::unselect();
     for (uint32_t i = 0; i < pulse_width_clk; i++) __NOP();
     LL_IF::select();
-}
-
-template<class LL_IF>
-constexpr uint16_t Ili9341_driver<LL_IF>::colorRgb565(uint8_t r, uint8_t g, uint8_t b)
-{
-    return (uint16_t)( ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | ((b & 0xF8) >> 3) );
-}
-
-template<class LL_IF>
-constexpr uint16_t Ili9341_driver<LL_IF>::colorBgr565(uint8_t r, uint8_t g, uint8_t b)
-{
-    return (uint16_t)( ((b & 0xF8) << 8) | ((g & 0xFC) << 3) | ((r & 0xF8) >> 3) );
 }
 
 template<class LL_IF>
@@ -387,18 +417,26 @@ void Ili9341_driver<LL_IF>::init(Orientation orientation, ColorFormat color_form
         {
             case Orientation::PORTRAIT:
                 madctl = MADCTL_MX;
+                s_width = 240;
+                s_height = 320;
                 break;
             case Orientation::LANDSCAPE:
                 madctl = MADCTL_MV;
+                s_width = 320;
+                s_height = 240;
                 break;
             case Orientation::PORTRAIT_FLIPPED:
                 madctl = MADCTL_MY;
+                s_width = 240;
+                s_height = 320;
                 break;
             case Orientation::LANDSCAPE_FLIPPED:
                 madctl = MADCTL_MX | MADCTL_MY | MADCTL_MV;
+                s_width = 320;
+                s_height = 240;
                 break;
         }
-        if (color_format == ColorFormat::BGR565) {
+        if ((color_format == ColorFormat::BGR565) != COLOR_FILTER_BGR) {
             madctl |= MADCTL_BGR;
         } else {
             madctl |= MADCTL_RGB;
@@ -408,14 +446,6 @@ void Ili9341_driver<LL_IF>::init(Orientation orientation, ColorFormat color_form
     }
 
     LL_IF::unselect();    
-}
-
-template<class LL_IF>
-void Ili9341_driver<LL_IF>::setAddressWindow(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1)
-{
-    setXWindow(x0, x1);
-    setYWindow(y0, y1);
-    enableRamAccess();
 }
 
 template<class LL_IF>
@@ -439,25 +469,48 @@ void Ili9341_driver<LL_IF>::setYWindow(uint16_t y0, uint16_t y1)
 }
 
 template<class LL_IF>
-void Ili9341_driver<LL_IF>::enableRamAccess()
+void Ili9341_driver<LL_IF>::memoryWrite()
 {
     writeCommand(Command::MEMORY_WRITE);
 }
 
 template<class LL_IF>
+void Ili9341_driver<LL_IF>::setAddressWindow(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1)
+{
+    setXWindow(x0, x1);
+    setYWindow(y0, y1);
+    memoryWrite();
+}
+
+template<class LL_IF>
 void Ili9341_driver<LL_IF>::drawPixel(uint16_t x, uint16_t y, uint16_t color)
 {
+    if((x >= getWidth()) || (y >= getHeight())) return;
 
+    setAddressWindow(x, y, x, y);
+    uint8_t data[] = { color >> 8, color & 0xFF };
+    LL_IF::writeData(data, sizeof(data), false);
 }
 
 template<class LL_IF>
 void Ili9341_driver<LL_IF>::fillRectangle(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t color)
 {
+    if((x >= getWidth()) || (y >= getHeight())) return;
+    if((x + w - 1) >= getWidth()) w = getWidth() - x;
+    if((y + h - 1) >= getHeight()) h = getHeight() - y;
+
+    setAddressWindow(x, y, x+w-1, y+h-1);
+    uint8_t data[] = { color >> 8, color & 0xFF };
+    for(uint32_t i = 0; i < (w * h); i++)
+    {
+        LL_IF::writeData(data, sizeof(data), false);
+    }
 }
 
 template<class LL_IF>
 void Ili9341_driver<LL_IF>::fillScreen(uint16_t color)
 {
+    fillRectangle(0, 0, getWidth(), getHeight(), color);
 }
 
 template<class LL_IF>
@@ -467,6 +520,11 @@ void Ili9341_driver<LL_IF>::drawImage(uint16_t x, uint16_t y, uint16_t w, uint16
 
 template<class LL_IF>
 void Ili9341_driver<LL_IF>::invertColors(bool invert)
+{
+}
+
+template<class LL_IF>
+void Ili9341_driver<LL_IF>::writeChar(uint16_t x, uint16_t y, char ch, FontDef font, uint16_t color, uint16_t bgcolor)
 {
 }
 

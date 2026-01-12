@@ -17,7 +17,7 @@ class Bus;
 class Cartridge
 {
 public:
-    Cartridge(const uint8_t* irom_data, size_t irom_size, bool isNsf = false);
+    Cartridge(const uint8_t* irom_data, size_t irom_size, bool isNsf = false, uint32_t loadAddr = 0x8000);
     ~Cartridge();
 
     enum MIRROR

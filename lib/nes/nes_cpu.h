@@ -110,6 +110,7 @@ public:
     void apuWrite(uint16_t addr, uint8_t data);
     uint8_t apuRead(uint16_t addr);
     void clock(int i) /*optimize_speed*/;
+    void clockUntilRts();
     void OAM_DMA(uint8_t page);
     void reset();
 

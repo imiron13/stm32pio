@@ -3,7 +3,7 @@
 
 #define IRAM_ATTR
 
-Cartridge::Cartridge(const uint8_t* irom_data, size_t irom_size, bool isNsf)
+Cartridge::Cartridge(const uint8_t* irom_data, size_t irom_size, bool isNsf, uint32_t loadAddr)
 {
     rom_data = irom_data;
     rom_size = irom_size;
@@ -14,6 +14,7 @@ Cartridge::Cartridge(const uint8_t* irom_data, size_t irom_size, bool isNsf)
         number_PRG_banks = 2;
         number_CHR_banks = 0;
         prg_base = 0x80;
+        prg_base -= (loadAddr - 0x8000);
     }
     else
     {
