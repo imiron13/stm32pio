@@ -121,7 +121,8 @@ public:
     //void loadState(File& state);
 
     void connectBus(Bus* n) { bus = n; }
-
+    uint8_t fetch();
+    
     // Registers 
     uint8_t A = 0x00; // Accumulator
     uint8_t X = 0x00; // X Index
@@ -143,7 +144,6 @@ private:
     bool addrmode_implied = false;
     uint_fast8_t additional_cycle1 = 0;
     uint_fast8_t additional_cycle2 = 0;
-    uint8_t fetch();
     uint8_t read(uint16_t addr);
     void readBlock(uint16_t addr, uint32_t size, uint8_t* data);
     void write(uint16_t addr, uint8_t data);

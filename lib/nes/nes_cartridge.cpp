@@ -59,8 +59,8 @@ Cartridge::Cartridge(const uint8_t* irom_data, size_t irom_size, bool isNsf, uin
     switch (mapper_ID)
     {
         case 0: mapper = createMapper000(number_PRG_banks, number_CHR_banks, this); break;
-        /*case 1: mapper = createMapper001(number_PRG_banks, number_CHR_banks, this); break;
-        case 2: mapper = createMapper002(number_PRG_banks, number_CHR_banks, this); break;
+        case 1: mapper = createMapper001(number_PRG_banks, number_CHR_banks, this); break;
+        /*case 2: mapper = createMapper002(number_PRG_banks, number_CHR_banks, this); break;
         case 3: mapper = createMapper003(number_PRG_banks, number_CHR_banks, this); break;
         case 4: mapper = createMapper004(number_PRG_banks, number_CHR_banks, this); break;*/
     }
@@ -150,6 +150,11 @@ IRAM_ATTR void Cartridge::setMirrorMode(MIRROR mirror)
 Cartridge::MIRROR Cartridge::getMirrorMode()
 {
     return bus->getPPUMirrorMode();
+}
+
+void Cartridge::cpuPrefetchAgain()
+{
+    bus->cpu.fetch();
 }
 
 /*

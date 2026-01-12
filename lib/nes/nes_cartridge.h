@@ -4,11 +4,12 @@
 #include <cstdint>
 #include "nes_mapper.h"
 #include "nes_mapper000.h"
+#include "nes_mapper001.h"
 using namespace std;
 /*#include <SD.h>
 #include <SPI.h>
 #include <vector>
-#include "mappers/mapper001.h"
+
 #include "mappers/mapper002.h"
 #include "mappers/mapper003.h"
 #include "mappers/mapper004.h"*/
@@ -44,6 +45,7 @@ public:
     Cartridge::MIRROR getMirrorMode();
     void connectBus(Bus* n) { bus = n; }
     void IRQ();
+    void cpuPrefetchAgain();
 
     /*void dumpState(File& state);
     void loadState(File& state);*/

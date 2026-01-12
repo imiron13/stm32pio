@@ -38,7 +38,7 @@ struct MapperVTable
 struct Bank
 {
     uint8_t bank_id;
-    uint8_t* bank_ptr;
+    const uint8_t* bank_ptr;
     uint32_t last_used;
     uint32_t size;
 };
@@ -52,7 +52,7 @@ struct BankCache
 };
 
 void bankInit(BankCache* cache, Bank* banks, uint8_t num_banks, uint32_t bank_size, Cartridge* cart);
-uint8_t* getBank(BankCache* cache, uint8_t bank_id, Mapper::ROM_TYPE rom);
+const uint8_t* getBank(BankCache* cache, uint8_t bank_id, Mapper::ROM_TYPE rom);
 uint8_t getBankIndex(BankCache* cache, uint8_t* ptr);
 void invalidateCache(BankCache* cache);
 
