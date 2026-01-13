@@ -131,6 +131,7 @@ IRAM_ATTR bool Mapper001_cpuWrite(Mapper* mapper, uint16_t addr, uint8_t data)
             // CHR bank 0 Register
             case 1:
                 state->CHR_bank_0 = state->load & 0x1F;
+                if (state->number_CHR_banks == 0) break;
 
                 if (state->CHR_ROM_bank_mode == 0)
                 {
@@ -147,6 +148,7 @@ IRAM_ATTR bool Mapper001_cpuWrite(Mapper* mapper, uint16_t addr, uint8_t data)
             // CHR bank 1 Register
             case 2:
                 state->CHR_bank_1 = state->load & 0x1F;
+                if (state->number_CHR_banks == 0) break;
 
                 if (state->CHR_ROM_bank_mode == 1)
                 {
@@ -363,6 +365,7 @@ const MapperVTable Mapper001_vtable =
 };
 
 static uint8_t mapper1_ram[8192];
+static uint8_t mapper1_chr_ram[8192];
 Mapper001_state mapper1_state;
 
 Mapper createMapper001(uint8_t PRG_banks, uint8_t CHR_banks, Cartridge* cart)
@@ -381,7 +384,7 @@ Mapper createMapper001(uint8_t PRG_banks, uint8_t CHR_banks, Cartridge* cart)
     if (CHR_banks == 0) 
     {
         // Allocate one shared 8 KB RAM
-        state->CHR_RAM = (uint8_t*)malloc(8 * 1024);
+        state->CHR_RAM = mapper1_chr_ram;//(uint8_t*)malloc(8 * 1024);
         memset(state->CHR_RAM, 0, 8 * 1024);
     }
     else
