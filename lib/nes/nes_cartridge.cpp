@@ -1,3 +1,4 @@
+#include "anemoia_config.h"
 #include "nes_cartridge.h"
 #include "nes_bus.h"
 
@@ -59,7 +60,9 @@ Cartridge::Cartridge(const uint8_t* irom_data, size_t irom_size, bool isNsf, uin
     switch (mapper_ID)
     {
         case 0: mapper = createMapper000(number_PRG_banks, number_CHR_banks, this); break;
+        #if (ANEMOIA_CFG_SUPPORT_MAPPER_001 == 1)
         case 1: mapper = createMapper001(number_PRG_banks, number_CHR_banks, this); break;
+        #endif
         /*case 2: mapper = createMapper002(number_PRG_banks, number_CHR_banks, this); break;
         case 3: mapper = createMapper003(number_PRG_banks, number_CHR_banks, this); break;
         case 4: mapper = createMapper004(number_PRG_banks, number_CHR_banks, this); break;*/

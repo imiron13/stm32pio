@@ -23,7 +23,7 @@ using namespace std;
 //#define SAMPLE_RATE 22050
 //#define SAMPLE_RATE 11025
 
-sram2_section int16_t Apu2A03::audio_buffer[AUDIO_BUFFER_SIZE];
+sram2_section int16_t Apu2A03::audio_buffer[ANEMOIA_CFG_AUDIO_BUFFER_SIZE];
 
 Apu2A03::Apu2A03()
 {
@@ -308,7 +308,6 @@ IRAM_ATTR uint8_t Apu2A03::cpuRead(uint16_t addr)
 	}
 	return data;
 }
-#include "cmsis_os.h"
 
 /*CRITICAL_FUNCTION*/ void Apu2A03::clock(uint32_t cycles)
 { 
@@ -528,14 +527,13 @@ IRAM_ATTR void Apu2A03::generateSample()
 
 	//int16_t s16 = ((int16_t)val - 128) << 8;  // 8-bit unsigned -> signed 16-bit
 	uint8_t u8 = (uint8_t) ((int16_t)val - 128);
-	uint16_t u16 = ((uint32_t)u8 << 8) | u8;
+	uint16_t u16 = ((uint32_t)u8 << 8) | u8;  // two channels with same value (8 bit signed each)
 
-	audio_buffer[buffer_index + 0] = u16;  // Left
-	//audio_buffer[buffer_index + 1] = s16;  // Right
+	audio_buffer[buffer_index] = u16;
 	buffer_index++;
 
 	// Reset audio buffer index once filled
-	if (buffer_index >= AUDIO_BUFFER_SIZE) 
+	if (buffer_index >= ANEMOIA_CFG_AUDIO_BUFFER_SIZE) 
     { 
 		buffer_index = 0;
     }

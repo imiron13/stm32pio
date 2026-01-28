@@ -449,7 +449,7 @@ IRAM_ATTR void Cpu6502::apuWrite(uint16_t addr, uint8_t data)
     apu.cpuWrite(addr, data);
 }
 
-inline IRAM_ATTR uint8_t Cpu6502::fetch()
+/*inline*/ IRAM_ATTR uint8_t Cpu6502::fetch()
 {
 	if (addrmode_implied == false)
 		fetched = read(addr_abs);

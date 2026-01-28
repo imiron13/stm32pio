@@ -20,9 +20,34 @@ env.Replace(
     GDB     = f"{TOOLCHAIN}/arm-none-eabi-gdb",
 )
 
-#env.Append(ASFLAGS=[
-    #"-mcpu=cortex-m4",
-    #"-mthumb",
-    #"-mfpu=fpv4-sp-d16",
-    #"-mfloat-abi=softfp"
-#])
+env.Append(ASFLAGS=[
+    "-mcpu=cortex-m4",
+    "-mthumb",
+    "-mfloat-abi=hard",
+    "-mfpu=fpv4-sp-d16",
+    "-mlong-calls",
+    "-fno-optimize-sibling-calls",
+    #"-flto-partition=1to1",
+    #"-flto"
+])
+
+env.Append(LINKFLAGS=[
+    "-mcpu=cortex-m4",
+    "-mthumb",
+    "-mfloat-abi=hard",
+    "-mfpu=fpv4-sp-d16",
+    "-mlong-calls",
+    "-fno-optimize-sibling-calls",
+    #"-flto-partition=1to1",
+    #"-flto"
+])
+env.Append(CCFLAGS=[
+    "-mcpu=cortex-m4",
+    "-mthumb",
+    "-mfloat-abi=hard",
+    "-mfpu=fpv4-sp-d16",
+    "-mlong-calls",
+    "-fno-optimize-sibling-calls",
+    #"-flto-partition=1to1",
+    #"-flto"
+])

@@ -107,10 +107,10 @@ extern TIM_HandleTypeDef htim1;
     TIM1->BDTR |= TIM_BDTR_MOE; \
 } while(0)
 
-void set_window()
+void set_window(uint32_t y0=0)
 {
     Ili9341::controlMode();
-    Ili9341::setAddressWindow(32, 0, 32 + 255, 239);
+    Ili9341::setAddressWindow(32, y0, 32 + 255, 239);
     Ili9341::dmaMode();
  }
 
@@ -147,9 +147,7 @@ void lcd_sync(uint32_t scanline)
                     SCANLINE_SIZE * SCANLINES_PER_BUFFER * 4);
     }
     Ili9341::restartCs(10);
-    Ili9341::controlMode();
-    Ili9341::setAddressWindow(32, scanline, 32 + 255, 239);
-    Ili9341::dmaMode();
+    set_window(scanline);
 
     /* --- FIRE PHASE --- */
     

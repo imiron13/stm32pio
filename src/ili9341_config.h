@@ -1,3 +1,5 @@
+#pragma once
+
 #include <gpio_pin_stm32.h>
 
 using Ili9341_bus = GpioPortA0_8Bit;

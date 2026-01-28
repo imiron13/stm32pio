@@ -1,3 +1,6 @@
+#include "anemoia_config.h"
+
+#if (ANEMOIA_CFG_SUPPORT_MAPPER_001 == 1)
 #include "nes_mapper001.h"
 #include "nes_cartridge.h"
 
@@ -397,3 +400,4 @@ Mapper createMapper001(uint8_t PRG_banks, uint8_t CHR_banks, Cartridge* cart)
     return mapper;
 }
 
+#endif

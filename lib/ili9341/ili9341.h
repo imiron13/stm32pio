@@ -7,6 +7,7 @@
 //******************************************************************************
 // Color format
 //******************************************************************************
+/* [15:11] - R, [10:5] - G, [4:0] - B */
 class ColorFormatRgb565
 {
 public:
@@ -15,6 +16,8 @@ public:
         return (uint16_t)( ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | ((b & 0xF8) >> 3) );
     }
 };
+
+/* [15:11] - B, [10:5] - G, [4:0] - R */
 class ColorFormatBgr565
 {
 public:
@@ -114,11 +117,11 @@ public:
 //******************************************************************************
 // ILI9341 driver
 //******************************************************************************
-template<class LL_IF>
+/* Use COLOR_FILTER_BGR=true for LCD with BGR color filter panel, false for RGB,
+   if set incorrectly, color format RGB/BGR will be swapped. */
+template<class LL_IF, bool COLOR_FILTER_BGR=true>
 class Ili9341_driver
 {
-    static constexpr bool COLOR_FILTER_BGR = true;  // set to true if LCD uses BGR color filter panel, false for RGB
-
     enum class Command
     {
         NOP = 0x00,
@@ -251,37 +254,37 @@ public:
     static void writeString(uint16_t x, uint16_t y, const char* str, FontDef font, uint16_t color, uint16_t bgcolor);
 };
 
-template<class LL_IF>
-void Ili9341_driver<LL_IF>::dmaMode()
+template<class LL_IF, bool COLOR_FILTER_BGR>
+void Ili9341_driver<LL_IF, COLOR_FILTER_BGR>::dmaMode()
 {
     LL_IF::dataMode();
     LL_IF::dmaMode();
     LL_IF::select();
 }
 
-template<class LL_IF>
-void Ili9341_driver<LL_IF>::controlMode()
+template<class LL_IF, bool COLOR_FILTER_BGR>
+void Ili9341_driver<LL_IF, COLOR_FILTER_BGR>::controlMode()
 {
     LL_IF::controlMode();
     LL_IF::select();
 }
 
-template<class LL_IF>
-void Ili9341_driver<LL_IF>::writeCommand(Command cmd, bool doSelect)
+template<class LL_IF, bool COLOR_FILTER_BGR>
+void Ili9341_driver<LL_IF, COLOR_FILTER_BGR>::writeCommand(Command cmd, bool doSelect)
 {
     LL_IF::writeCommand(static_cast<uint8_t>(cmd), doSelect);
 }
 
-template<class LL_IF>
-void Ili9341_driver<LL_IF>::restartCs(uint32_t pulse_width_clk)
+template<class LL_IF, bool COLOR_FILTER_BGR>
+void Ili9341_driver<LL_IF, COLOR_FILTER_BGR>::restartCs(uint32_t pulse_width_clk)
 {
     LL_IF::unselect();
     for (uint32_t i = 0; i < pulse_width_clk; i++) __NOP();
     LL_IF::select();
 }
 
-template<class LL_IF>
-void Ili9341_driver<LL_IF>::init(Orientation orientation, ColorFormat color_format)
+template<class LL_IF, bool COLOR_FILTER_BGR>
+void Ili9341_driver<LL_IF, COLOR_FILTER_BGR>::init(Orientation orientation, ColorFormat color_format)
 {
     const uint32_t RESET_PULSE_MS = 5;
     LL_IF::controlMode();
@@ -448,8 +451,8 @@ void Ili9341_driver<LL_IF>::init(Orientation orientation, ColorFormat color_form
     LL_IF::unselect();    
 }
 
-template<class LL_IF>
-void Ili9341_driver<LL_IF>::setXWindow(uint16_t x0, uint16_t x1)
+template<class LL_IF, bool COLOR_FILTER_BGR>
+void Ili9341_driver<LL_IF, COLOR_FILTER_BGR>::setXWindow(uint16_t x0, uint16_t x1)
 {
     writeCommand(Command::COLUMN_ADDRESS_SET);
     {
@@ -458,8 +461,8 @@ void Ili9341_driver<LL_IF>::setXWindow(uint16_t x0, uint16_t x1)
     }
 }
 
-template<class LL_IF>
-void Ili9341_driver<LL_IF>::setYWindow(uint16_t y0, uint16_t y1)
+template<class LL_IF, bool COLOR_FILTER_BGR>
+void Ili9341_driver<LL_IF, COLOR_FILTER_BGR>::setYWindow(uint16_t y0, uint16_t y1)
 {
     writeCommand(Command::ROW_ADDRESS_SET);
     {
@@ -468,22 +471,22 @@ void Ili9341_driver<LL_IF>::setYWindow(uint16_t y0, uint16_t y1)
     }
 }
 
-template<class LL_IF>
-void Ili9341_driver<LL_IF>::memoryWrite()
+template<class LL_IF, bool COLOR_FILTER_BGR>
+void Ili9341_driver<LL_IF, COLOR_FILTER_BGR>::memoryWrite()
 {
     writeCommand(Command::MEMORY_WRITE);
 }
 
-template<class LL_IF>
-void Ili9341_driver<LL_IF>::setAddressWindow(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1)
+template<class LL_IF, bool COLOR_FILTER_BGR>
+void Ili9341_driver<LL_IF, COLOR_FILTER_BGR>::setAddressWindow(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1)
 {
     setXWindow(x0, x1);
     setYWindow(y0, y1);
     memoryWrite();
 }
 
-template<class LL_IF>
-void Ili9341_driver<LL_IF>::drawPixel(uint16_t x, uint16_t y, uint16_t color)
+template<class LL_IF, bool COLOR_FILTER_BGR>
+void Ili9341_driver<LL_IF, COLOR_FILTER_BGR>::drawPixel(uint16_t x, uint16_t y, uint16_t color)
 {
     if((x >= getWidth()) || (y >= getHeight())) return;
 
@@ -492,8 +495,8 @@ void Ili9341_driver<LL_IF>::drawPixel(uint16_t x, uint16_t y, uint16_t color)
     LL_IF::writeData(data, sizeof(data), false);
 }
 
-template<class LL_IF>
-void Ili9341_driver<LL_IF>::fillRectangle(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t color)
+template<class LL_IF, bool COLOR_FILTER_BGR>
+void Ili9341_driver<LL_IF, COLOR_FILTER_BGR>::fillRectangle(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t color)
 {
     if((x >= getWidth()) || (y >= getHeight())) return;
     if((x + w - 1) >= getWidth()) w = getWidth() - x;
@@ -507,29 +510,29 @@ void Ili9341_driver<LL_IF>::fillRectangle(uint16_t x, uint16_t y, uint16_t w, ui
     }
 }
 
-template<class LL_IF>
-void Ili9341_driver<LL_IF>::fillScreen(uint16_t color)
+template<class LL_IF, bool COLOR_FILTER_BGR>
+void Ili9341_driver<LL_IF, COLOR_FILTER_BGR>::fillScreen(uint16_t color)
 {
     fillRectangle(0, 0, getWidth(), getHeight(), color);
 }
 
-template<class LL_IF>
-void Ili9341_driver<LL_IF>::drawImage(uint16_t x, uint16_t y, uint16_t w, uint16_t h, const uint16_t* data)
+template<class LL_IF, bool COLOR_FILTER_BGR>
+void Ili9341_driver<LL_IF, COLOR_FILTER_BGR>::drawImage(uint16_t x, uint16_t y, uint16_t w, uint16_t h, const uint16_t* data)
 {
 }
 
-template<class LL_IF>
-void Ili9341_driver<LL_IF>::invertColors(bool invert)
+template<class LL_IF, bool COLOR_FILTER_BGR>
+void Ili9341_driver<LL_IF, COLOR_FILTER_BGR>::invertColors(bool invert)
 {
 }
 
-template<class LL_IF>
-void Ili9341_driver<LL_IF>::writeChar(uint16_t x, uint16_t y, char ch, FontDef font, uint16_t color, uint16_t bgcolor)
+template<class LL_IF, bool COLOR_FILTER_BGR>
+void Ili9341_driver<LL_IF, COLOR_FILTER_BGR>::writeChar(uint16_t x, uint16_t y, char ch, FontDef font, uint16_t color, uint16_t bgcolor)
 {
 }
 
-template<class LL_IF>
-void Ili9341_driver<LL_IF>::writeString(uint16_t x, uint16_t y, const char* str, FontDef font, uint16_t color, uint16_t bgcolor)
+template<class LL_IF, bool COLOR_FILTER_BGR>
+void Ili9341_driver<LL_IF, COLOR_FILTER_BGR>::writeString(uint16_t x, uint16_t y, const char* str, FontDef font, uint16_t color, uint16_t bgcolor)
 {
 }
 

@@ -10,10 +10,9 @@
 
 #include <intrinsics.h>
 #include <cstdint>
+#include "anemoia_config.h"
 
 using namespace std;
-
-#define AUDIO_BUFFER_SIZE (1*1024)
 
 class Bus;
 class Cpu6502;
@@ -41,10 +40,10 @@ public:
 	void clock(uint32_t cycles) optimize_speed /*CRITICAL_FUNCTION*/;
 	void updateNearestClockEvent();
     void resetChannels();
-	uint32_t getBufferSpace() { return (dma->getReadPos() - buffer_index) % AUDIO_BUFFER_SIZE; }
-	bool isBufferHalfFull() { return getBufferSpace() <= AUDIO_BUFFER_SIZE / 2; }
+	uint32_t getBufferSpace() { return (dma->getReadPos() - buffer_index) % ANEMOIA_CFG_AUDIO_BUFFER_SIZE; }
+	bool isBufferHalfFull() { return getBufferSpace() <= ANEMOIA_CFG_AUDIO_BUFFER_SIZE / 2; }
 	bool isBufferFull() { return getBufferSpace() <= 16; }
-    static int16_t audio_buffer[AUDIO_BUFFER_SIZE];
+    static int16_t audio_buffer[ANEMOIA_CFG_AUDIO_BUFFER_SIZE];
 
     uint8_t DMC_sample_byte = 0;
 	bool IRQ = false;

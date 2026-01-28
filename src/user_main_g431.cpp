@@ -13,6 +13,7 @@
 #include "usb_device.h"
 #include <usb_vcom_stdio_stm32.h>
 
+#include "anemoia_config.h"
 #include <gpio_pin.h>
 #include <led.h>
 #include <button.h>
@@ -24,10 +25,10 @@
 #include <nes_cartridge.h>
 #include <vgm.h>
 
-#include <FreeRTOS.h>
-#include "task.h"
-#include "queue.h"
-#include "cmsis_os.h"
+//#include <FreeRTOS.h>
+//#include "task.h"
+//#include "queue.h"
+//#include "cmsis_os.h"
 #include "st7735.h"
 #include "st7735_vt100.h"
 #include "fonts.h"
@@ -56,7 +57,8 @@ extern TIM_HandleTypeDef htim3;
 
 Shell_t shell;
 
-#define MAX_FILE_SIZE (33 * 1024)
+#define MAX_FILE_SIZE (1)
+//#define MAX_FILE_SIZE (33 * 1024)
 uint8_t romBuffer[MAX_FILE_SIZE];
 
 //extern const uint8_t _binary_Unchained_vgm_start;
@@ -94,7 +96,6 @@ extern const unsigned int _binary_baloon_nes_size;
 #define NSF_ROM   ((uint8_t*)&_binary_baloon_nes_start)
 #define NSF_ROM_SIZE  ((unsigned int)&_binary_baloon_nes_size)*/
 
-
 /*extern const uint8_t _binary_loonar_nes_start;
 extern const unsigned int _binary_loonar_nes_size;
 
@@ -113,17 +114,29 @@ extern const unsigned int _binary_chip_nes_size;
 #define NSF_ROM   ((uint8_t*)&_binary_chip_nes_start)
 #define NSF_ROM_SIZE  ((unsigned int)&_binary_chip_nes_size)*/
 
-/*extern const uint8_t _binary_drmario_nes_start;
+extern const uint8_t _binary_drmario_nes_start;
 extern const unsigned int _binary_drmario_nes_size;
 
 #define NSF_ROM   ((uint8_t*)&_binary_drmario_nes_start)
-#define NSF_ROM_SIZE  ((unsigned int)&_binary_drmario_nes_size)*/
+#define NSF_ROM_SIZE  ((unsigned int)&_binary_drmario_nes_size)
 
-extern const uint8_t _binary_zelda_nes_start;
+/*extern const uint8_t _binary_zelda_nes_start;
 extern const unsigned int _binary_zelda_nes_size;
 
 #define NSF_ROM   ((uint8_t*)&_binary_zelda_nes_start)
-#define NSF_ROM_SIZE  ((unsigned int)&_binary_zelda_nes_size)
+#define NSF_ROM_SIZE  ((unsigned int)&_binary_zelda_nes_size)*/
+
+/*extern const uint8_t _binary_chess_nes_start;
+extern const unsigned int _binary_chess_nes_size;
+
+#define NSF_ROM   ((uint8_t*)&_binary_chess_nes_start)
+#define NSF_ROM_SIZE  ((unsigned int)&_binary_chess_nes_size)*/
+
+/*extern const uint8_t _binary_drag_nes_start;
+extern const unsigned int _binary_drag_nes_size;
+
+#define NSF_ROM   ((uint8_t*)&_binary_drag_nes_start)
+#define NSF_ROM_SIZE  ((unsigned int)&_binary_drag_nes_size)*/
 
 /*extern const uint8_t _binary_tanks_nes_start;
 extern const unsigned int _binary_tanks_nes_size;
@@ -184,7 +197,7 @@ public:
 
     virtual uint32_t getReadPos() const override
     {
-        return AUDIO_BUFFER_SIZE - __HAL_DMA_GET_COUNTER(hi2s2.hdmatx) / 2;
+        return ANEMOIA_CFG_AUDIO_BUFFER_SIZE - __HAL_DMA_GET_COUNTER(hi2s2.hdmatx) / 2;
     };
 };
 
@@ -310,7 +323,7 @@ bool shell_cmd_led(FILE *f, ShellCmd_t *cmd, const char *s)
 
 bool shell_cmd_info(FILE *f, ShellCmd_t *cmd, const char *s)
 {
-    printf(ENDL "Hello from %s (FreeRTOS)!" ENDL, MCU_NAME_STR);
+    printf(ENDL "Hello from %s!" ENDL, MCU_NAME_STR);
 #ifdef DEBUG
     printf("DEBUG=1, build time: " __TIME__ ENDL);
 #else
@@ -349,7 +362,7 @@ bool shell_cmd_host_read(FILE *f, ShellCmd_t *cmd, const char *s)
 bool shell_cmd_play_vgm_chiptune(FILE *f, ShellCmd_t *cmd, const char *s)
 {
     fprintf(f, "Playing VGM chiptune..." ENDL);
-    audio_output.playBuffer(bus.cpu.apu.audio_buffer, AUDIO_BUFFER_SIZE*2);
+    audio_output.playBuffer(bus.cpu.apu.audio_buffer, ANEMOIA_CFG_AUDIO_BUFFER_SIZE*2);
 
     VgmPlayer::Status status = vgm_player.play(&romBuffer[0],
                                               loadedRomSize,
@@ -402,7 +415,7 @@ bool shell_cmd_play_nsf_chiptune(FILE *f, ShellCmd_t *cmd, const char *s)
     uint32_t periodInUsecs = isNtsc ? periodInUsecsNtsc : periodInUsecsPal;
     Cartridge cart(nsf_data, nsf_size, true, loadAddr);
     bus.insertCartridge(&cart);
-    audio_output.playBuffer(bus.cpu.apu.audio_buffer, AUDIO_BUFFER_SIZE*2);
+    audio_output.playBuffer(bus.cpu.apu.audio_buffer, ANEMOIA_CFG_AUDIO_BUFFER_SIZE*2);
     uint32_t apuClksPerFrame = (uint64_t)894886 * periodInUsecs / 1000000;  // /*18623*50/60=15519, 14914*/
     bool loadNewSong = true;
 
@@ -474,9 +487,6 @@ void init_shell(FILE *device=stdout)
     shell.print_prompt();
 }
 
-extern "C" void task_nes_emu_main(void *argument);
-osThreadId_t task_handle_nes_emu_main;
-
 extern "C" void task_nes_emu_main(void *argument)
 {
     // --- Calibration (Optional) ---
@@ -504,7 +514,7 @@ extern "C" void task_nes_emu_main(void *argument)
     // Instantiate Driver
     AnalogStick joystick(joyConfig);
 
-    audio_output.playBuffer(bus.cpu.apu.audio_buffer, AUDIO_BUFFER_SIZE*2);
+    audio_output.playBuffer(bus.cpu.apu.audio_buffer, ANEMOIA_CFG_AUDIO_BUFFER_SIZE*2);
     while (1)
     {
         //__disable_irq();
@@ -592,7 +602,7 @@ extern "C" void task_nes_emu_main(void *argument)
 extern TIM_HandleTypeDef htim1;
 
 // Import the linker symbols we defined
-extern uint32_t _siccmram;  // Source (Flash)
+/*extern uint32_t _siccmram;  // Source (Flash)
 extern uint32_t _sccmram;   // Destination (CCM RAM)
 extern uint32_t _eccmram;   // End (CCM RAM)
 
@@ -606,20 +616,20 @@ void Copy_CCMRAM(void)
     while (dst < end) {
         *dst++ = *src++;
     }
-}
+}*/
 
 extern "C" void init()
 {
-    Copy_CCMRAM();
+    //Copy_CCMRAM();
 
 #if 1
-    MX_USB_DEVICE_Init();
+    //MX_USB_DEVICE_Init();
 
     FILE *fuart1 = uart_fopen(&huart1);
     stdout = fuart1;
 
-    FILE *fusb_vcom = usb_vcom_fopen();
-    stdout = fusb_vcom;
+    //FILE *fusb_vcom = usb_vcom_fopen();
+    //stdout = fusb_vcom;
 
     printf(BG_BLACK FG_BRIGHT_WHITE VT100_CLEAR_SCREEN VT100_CURSOR_HOME VT100_SHOW_CURSOR);
     printf(ENDL "Hello from %s (FreeRTOS)!" ENDL, MCU_NAME_STR);
@@ -649,16 +659,5 @@ extern "C" void init()
     {
         shell.run();
         HAL_Delay(10);
-        //osDelay(1);
     }
-#if 0
-    osThreadAttr_t nesEmuMainTask_attributes = { };
-    nesEmuMainTask_attributes.name = "task_nes_emu_main";
-    nesEmuMainTask_attributes.stack_size = 256 * 4;
-    nesEmuMainTask_attributes.priority = (osPriority_t) osPriorityNormal;
-
-    task_handle_nes_emu_main = osThreadNew(task_nes_emu_main, NULL, &nesEmuMainTask_attributes);
-
-#endif
-
 }
