@@ -6,6 +6,7 @@
 #include <cstring>
 
 #include <hal_wrapper_stm32.h>
+#include <dma_gpio_pwm_stm32.h>
 #include "st7735.h"
 
 #include "stm32g4xx_ll_dma.h"
@@ -83,36 +84,7 @@ void Bus::cpuReadBlock(uint16_t addr, uint32_t size, uint8_t* data)
 }
 
 #include "hal_wrapper_stm32.h"
-extern TIM_HandleTypeDef htim1;
-
 #include "ili9341.h"
-
-/* Add this to your Initialization or Burst Macro */
-#define CONFIGURE_BURST_MODE(pixels) do { \
-    /* ... (Your existing setup) ... */ \
-    TIM1->RCR = (pixels) - 1; \
-    TIM1->CCR2 = 1; \
-    TIM1->DIER |= TIM_DIER_CC2DE; \
-    TIM1->DIER &= ~TIM_DIER_UDE; \
-    TIM1->CR1 |= TIM_CR1_OPM; \
-    \
-    /* LOAD SHADOW REGISTERS */ \
-    TIM1->EGR = TIM_EGR_UG; \
-    __HAL_TIM_CLEAR_FLAG(&htim1, TIM_FLAG_UPDATE); \
-    \
-    /* THE FIX: ENABLE OUTPUTS MANUALLY */ \
-    /* 1. Enable Channel 1 (CC1E) */ \
-    TIM1->CCER |= TIM_CCER_CC1E; \
-    /* 2. Enable Main Output (MOE) - Critical for TIM1/TIM8 */ \
-    TIM1->BDTR |= TIM_BDTR_MOE; \
-} while(0)
-
-void set_window(uint32_t y0=0)
-{
-    Ili9341::controlMode();
-    Ili9341::setAddressWindow(32, y0, 32 + 255, 239);
-    Ili9341::dmaMode();
- }
 
 void setx(uint32_t x0, uint32_t x1)
 {
@@ -122,38 +94,21 @@ void setx(uint32_t x0, uint32_t x1)
     Ili9341::dmaMode();
 }
 
-uint32_t g_buf_addr;
-
-void lcd_sync(uint32_t scanline)
+void lcd_sync(uint8_t *buf, uint32_t scanline)
 {
-/* --- SYNC PHASE (Consumer Check) --- */
-        
-        /* A. Wait for Previous Line to Finish */
-        /* If the timer is still running (CEN=1), it means it hasn't finished */
-        /* sending the previous 256 pixels. We wait here. */
-        while (TIM1->CR1 & TIM_CR1_CEN);
-
-        /* B. Check Buffer Safety (Optional but recommended) */
-        /* Ensure DMA isn't reading the half we just wrote to. */
-        /* (Use your Get_DMA_Buf_Idx logic here if needed) */
-        //setx(32, 32 + 255);
+    Ili9341::waitTransferComplete();
+    //setx(32, 32 + 255);
         
     if (scanline % 2 == 0)
     {
-        HAL_DMA_Abort(htim1.hdma[TIM_DMA_ID_CC2]);
-        HAL_DMA_Start(htim1.hdma[TIM_DMA_ID_CC2], 
-                    g_buf_addr, 
-                    (uint32_t)&GPIOA->ODR, 
-                    SCANLINE_SIZE * SCANLINES_PER_BUFFER * 4);
+        Ili9341::setupCircularDoubleBufferMode(buf, SCANLINE_SIZE * SCANLINES_PER_BUFFER * 2 * sizeof(uint16_t));
     }
     Ili9341::restartCs(10);
-    set_window(scanline);
+    Ili9341::controlMode();
+    Ili9341::setAddressWindow(32, scanline, 32 + 255, 239);
+    Ili9341::dmaMode();
 
-    /* --- FIRE PHASE --- */
-    
-    /* Kick the Timer to send exactly 256 pixels */
-    /* Because OPM is on, it will run 256 times, then clear CEN automatically. */
-    TIM1->CR1 |= TIM_CR1_CEN;
+    Ili9341::startTransfer();
 }
 
 IRAM_ATTR void Bus::clock()
@@ -162,17 +117,11 @@ IRAM_ATTR void Bus::clock()
     if (frame_skip == 0) num_displayed_frames++;
     else num_skipped_frames++;
 
-    if (frame_skip == 0) {
-        g_buf_addr = (uint32_t)ppu.display_buffer;
-        ppu.write_buf_idx = 0;
-        ppu.ptr_display = ppu.display_buffer[1];
-        set_window();
-
-        HAL_DMA_Abort(htim1.hdma[TIM_DMA_ID_CC2]);
-        HAL_DMA_Start(htim1.hdma[TIM_DMA_ID_CC2], 
-                    (uint32_t)ppu.display_buffer, 
-                    (uint32_t)&GPIOA->ODR, 
-                    SCANLINE_SIZE * SCANLINES_PER_BUFFER * 4);
+    ppu.write_buf_idx = 0;
+    ppu.ptr_display = ppu.display_buffer[1];
+    if (!frame_skip) {
+        Ili9341::setAddressWindow(32, 0, 32 + 255, 239);
+        Ili9341::setupCircularDoubleBufferMode((uint8_t*)&ppu.display_buffer[0], SCANLINE_SIZE * SCANLINES_PER_BUFFER * 2 * sizeof(uint16_t));
     }
 
     // 1 frame == 341 dots * 261 scanlines
@@ -186,14 +135,7 @@ IRAM_ATTR void Bus::clock()
     {
         if (frame_skip == 0) { 
             ppu.renderScanline(ppu_scanline); 
-            if (ppu_scanline > 0)
-                lcd_sync(ppu_scanline - 1);
-
-            if (ppu_scanline == 0)
-            {
-                CONFIGURE_BURST_MODE(256*2);
-                lcd_sync(ppu_scanline);
-            }
+            Ili9341::doDoubleBufferTransfer();
         }
         else { ppu.fakeSpriteHit(ppu_scanline); }
 
@@ -202,7 +144,7 @@ IRAM_ATTR void Bus::clock()
 
         if (frame_skip == 0) { 
             ppu.renderScanline(ppu_scanline + 1); 
-            lcd_sync(ppu_scanline);
+            Ili9341::doDoubleBufferTransfer();
         }
         else { ppu.fakeSpriteHit(ppu_scanline + 1); }
 
@@ -211,14 +153,14 @@ IRAM_ATTR void Bus::clock()
 
         if (frame_skip == 0) { 
             ppu.renderScanline(ppu_scanline + 2); 
-            lcd_sync(ppu_scanline + 1);
+            Ili9341::doDoubleBufferTransfer();
         }
         else { ppu.fakeSpriteHit(ppu_scanline + 2);  }
 
         cpu.clock(114);
         cpu.apu.clock((113+114+114) / 2);
     }
-    while (TIM1->CR1 & TIM_CR1_CEN);
+    Ili9341::waitTransferComplete();
     //cpu.apu.clock(80/2);
     // Setup for the next frame
     // Same reason as scanlines 0-239, 2/3 of scanlines will have an extra CPU clock. 
@@ -257,31 +199,6 @@ void Bus::connectScreen(TFT_eSPI* screen)
     ptr_screen = screen;
 }
 #endif
-
-bool dma_busy = 0;
-
-static inline void spi_dma_start(void *data)
-{
-    LL_DMA_SetMemoryAddress(DMA1, LL_DMA_CHANNEL_2, (uint32_t)data);
-    LL_DMA_SetDataLength(DMA1, LL_DMA_CHANNEL_2, /*128*/ 256 * SCANLINES_PER_BUFFER * 2/2);
-    LL_DMA_EnableChannel(DMA1, LL_DMA_CHANNEL_2);
-    dma_busy = 1;
-}
-
-static inline void spi_dma_wait_ready(void)
-{
-    if (!dma_busy) return;
-    // DMA transfer complete
-    while (!LL_DMA_IsActiveFlag_TC2(DMA1)) {}
-    LL_DMA_ClearFlag_TC2(DMA1);
-
-    // Must wait until SPI is fully idle
-    while (LL_SPI_IsActiveFlag_BSY(SPI1)) {}
-
-    // Required: disable channel so next CNDTR reload takes effect
-    LL_DMA_DisableChannel(DMA1, LL_DMA_CHANNEL_2);
-    dma_busy = 0;
-}
 
 IRAM_ATTR void Bus::renderImage(uint16_t scanline)
 {

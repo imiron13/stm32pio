@@ -102,11 +102,11 @@ extern const unsigned int _binary_loonar_nes_size;
 #define NSF_ROM   ((uint8_t*)&_binary_loonar_nes_start)
 #define NSF_ROM_SIZE  ((unsigned int)&_binary_loonar_nes_size)*/
 
-/*extern const uint8_t _binary_smario_nes_start;
+extern const uint8_t _binary_smario_nes_start;
 extern const unsigned int _binary_smario_nes_size;
 
 #define NSF_ROM   ((uint8_t*)&_binary_smario_nes_start)
-#define NSF_ROM_SIZE  ((unsigned int)&_binary_smario_nes_size)*/
+#define NSF_ROM_SIZE  ((unsigned int)&_binary_smario_nes_size)
 
 /*extern const uint8_t _binary_chip_nes_start;
 extern const unsigned int _binary_chip_nes_size;
@@ -114,11 +114,11 @@ extern const unsigned int _binary_chip_nes_size;
 #define NSF_ROM   ((uint8_t*)&_binary_chip_nes_start)
 #define NSF_ROM_SIZE  ((unsigned int)&_binary_chip_nes_size)*/
 
-extern const uint8_t _binary_drmario_nes_start;
+/*extern const uint8_t _binary_drmario_nes_start;
 extern const unsigned int _binary_drmario_nes_size;
 
 #define NSF_ROM   ((uint8_t*)&_binary_drmario_nes_start)
-#define NSF_ROM_SIZE  ((unsigned int)&_binary_drmario_nes_size)
+#define NSF_ROM_SIZE  ((unsigned int)&_binary_drmario_nes_size)*/
 
 /*extern const uint8_t _binary_zelda_nes_start;
 extern const unsigned int _binary_zelda_nes_size;
@@ -643,6 +643,7 @@ extern "C" void init()
     init_shell(); 
 
     Ili9341::init(Ili9341::Orientation::LANDSCAPE);
+
     /*Ili9341::fillScreen(Ili9341_Color::RED);
     Ili9341::fillScreen(Ili9341_Color::GREEN);
     Ili9341::fillScreen(Ili9341_Color::BLUE);*/

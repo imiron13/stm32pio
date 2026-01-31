@@ -131,6 +131,22 @@ class GpioPort8BitTemplate
 {
     constexpr static GPIO_TypeDef *const gpio[7] = { GPIOA, GPIOB, GPIOC, GPIOD, GPIOE, GPIOF, GPIOG };
 public:
+    static void set_mode(uint32_t mode)
+    {
+        gpio[port_id]->MODER &= ~(0xFFFFU << (byte_index * 16));
+        gpio[port_id]->MODER |= (mode * 0x5555U << (byte_index * 16));
+    }
+
+    static void config_output()
+    {
+        set_mode(0x1U); // General purpose output mode
+    }
+
+    static void config_input()
+    {
+        set_mode(0x0U); // Input mode
+    }
+
     static void write(uint8_t data)
     {
         *((uint8_t*)&gpio[port_id]->ODR + byte_index) = data;
@@ -142,6 +158,21 @@ class GpioPort16BitTemplate
 {
     constexpr static GPIO_TypeDef *const gpio[7] = { GPIOA, GPIOB, GPIOC, GPIOD, GPIOE, GPIOF, GPIOG };
 public:
+    static void set_mode(uint32_t mode)
+    {
+        gpio[port_id]->MODER = mode * 0x55555555U;
+    }
+
+    static void config_output()
+    {
+        set_mode(0x1U); // General purpose output mode
+    }
+
+    static void config_input()
+    {
+        set_mode(0x0U); // Input mode
+    }
+
     static void write(uint16_t data)
     {
         *(uint16_t*)&gpio[port_id]->ODR = data;

@@ -49,10 +49,26 @@ public:
 //******************************************************************************
 // Low-level interface
 //******************************************************************************
-template<class BUS, class GPIO_DC, class GPIO_WR, class GPIO_RESET, class GPIO_CS, uint32_t WSTRB_DELAY>
+template<class BUS, class GPIO_DC, class GPIO_WR, class GPIO_RESET, class GPIO_CS, class DMA, uint32_t WSTRB_DELAY>
 class Ili9341_lowLevelInterface_8bitParallel
 {
 public:
+    static void init() {
+        DMA::init();
+
+        GPIO_CS::write_high();
+        GPIO_WR::write_high();
+        GPIO_RESET::write_high();
+        GPIO_DC::write_low();
+        BUS::write(0x00);
+
+        GPIO_CS::config_output();
+        GPIO_DC::config_output();
+        GPIO_WR::config_output();
+        GPIO_RESET::config_output();
+        BUS::config_output();
+    }
+
     static void select() {
         GPIO_CS::write_low();
     }
@@ -111,6 +127,22 @@ public:
     static void controlMode() {
         GPIO_WR::write_high();
         GPIO_WR::config_output();
+    }
+
+    static void setupCircularDoubleBufferMode(uint8_t* buff, size_t buff_size) {
+        DMA::setupCircularDoubleBufferMode(buff, buff_size);
+    }
+
+    static void startTransfer() {
+        DMA::startTransfer();
+    }
+
+    static void waitTransferComplete() {
+        DMA::waitTransferComplete();
+    }
+
+    static void doDoubleBufferTransfer() {
+        DMA::doDoubleBufferTransfer();
     }
 };
 
@@ -207,7 +239,8 @@ class Ili9341_driver
 
     static inline uint32_t s_width = 0;
     static inline uint32_t s_height = 0;
-
+    static inline uint32_t s_dmaTransferLinesPerTransfer = 0;
+    static inline uint32_t s_dmaTransferLine = 0;
 public:
     enum class ColorFormat
     {
@@ -237,6 +270,10 @@ public:
     static void dmaMode();
     static void controlMode();
     static void restartCs(uint32_t pulse_width_clk);
+    static void setupCircularDoubleBufferMode(uint8_t* buff, size_t buff_size);
+    static void startTransfer();
+    static void waitTransferComplete();
+    static void doDoubleBufferTransfer();
 
     // Low-level commands
     static void setAddressWindow(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1);
@@ -270,6 +307,32 @@ void Ili9341_driver<LL_IF, COLOR_FILTER_BGR>::controlMode()
 }
 
 template<class LL_IF, bool COLOR_FILTER_BGR>
+void Ili9341_driver<LL_IF, COLOR_FILTER_BGR>::setupCircularDoubleBufferMode(uint8_t* buff, size_t buff_size)
+{
+    LL_IF::setupCircularDoubleBufferMode(buff, buff_size);
+}
+
+template<class LL_IF, bool COLOR_FILTER_BGR>
+void Ili9341_driver<LL_IF, COLOR_FILTER_BGR>::startTransfer() {
+    LL_IF::startTransfer();
+}
+
+template<class LL_IF, bool COLOR_FILTER_BGR>
+void Ili9341_driver<LL_IF, COLOR_FILTER_BGR>::waitTransferComplete() {
+    LL_IF::waitTransferComplete();
+}
+
+template<class LL_IF, bool COLOR_FILTER_BGR>
+void Ili9341_driver<LL_IF, COLOR_FILTER_BGR>::doDoubleBufferTransfer() {
+    LL_IF::doDoubleBufferTransfer();
+    restartCs(10);
+    controlMode();
+    //setAddressWindow(32, scanline, 32 + 255, 239);
+    dmaMode();
+    startTransfer();
+}
+
+template<class LL_IF, bool COLOR_FILTER_BGR>
 void Ili9341_driver<LL_IF, COLOR_FILTER_BGR>::writeCommand(Command cmd, bool doSelect)
 {
     LL_IF::writeCommand(static_cast<uint8_t>(cmd), doSelect);
@@ -286,6 +349,8 @@ void Ili9341_driver<LL_IF, COLOR_FILTER_BGR>::restartCs(uint32_t pulse_width_clk
 template<class LL_IF, bool COLOR_FILTER_BGR>
 void Ili9341_driver<LL_IF, COLOR_FILTER_BGR>::init(Orientation orientation, ColorFormat color_format)
 {
+    LL_IF::init();
+
     const uint32_t RESET_PULSE_MS = 5;
     LL_IF::controlMode();
     LL_IF::select();
