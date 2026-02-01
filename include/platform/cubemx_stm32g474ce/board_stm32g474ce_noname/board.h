@@ -1,12 +1,13 @@
 #pragma once
 
 #include <gpio_pin.h>
+#include <gpio_pin_stm32.h>
 #include <led.h>
 #include <button.h>
 
-extern GpioPinPortC<6> led1_gpio;
-extern GpioPinPortB<8> button1_gpio;
-extern GpioPinPortC<13> button2_gpio;
+extern GpioPinStm32 led1_gpio;
+extern GpioPinStm32 button1_gpio;
+extern GpioPinStm32 button2_gpio;
 extern DummyGpioPinAlwaysLow dummy_gpio;
 
 extern Led_t led1;

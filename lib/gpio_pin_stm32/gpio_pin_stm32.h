@@ -26,6 +26,8 @@ enum GpioPortId
     GPIO_PORT_ID_DUMMY = INT32_MAX
 };
 
+constexpr static GPIO_TypeDef *const GpioPort_regsLut[7] = { GPIOA, GPIOB, GPIOC, GPIOD, GPIOE, GPIOF, GPIOG };
+
 inline void GpioPin_setMode(GPIO_TypeDef* regs, uint32_t pin_id, uint32_t mode)
 {
     uint32_t bit_shift = pin_id * 2;
@@ -41,16 +43,15 @@ inline void GpioPin_configPull(GPIO_TypeDef* regs, uint32_t pin_id, uint32_t pul
 template<GpioPortId port_id, int pin_id>
 class GpioPinTemplate
 {
-    constexpr static GPIO_TypeDef *const gpio[7] = { GPIOA, GPIOB, GPIOC, GPIOD, GPIOE, GPIOF, GPIOG };
 public:
     static void writeHigh()
     {
-        LL_GPIO_SetOutputPin(gpio[port_id], 1U << pin_id);
+        LL_GPIO_SetOutputPin(GpioPort_regsLut[port_id], 1U << pin_id);
     }
 
     static void writeLow()
     {
-        LL_GPIO_ResetOutputPin(gpio[port_id], 1U << pin_id);
+        LL_GPIO_ResetOutputPin(GpioPort_regsLut[port_id], 1U << pin_id);
     }
 
     static void write(bool is_high)
@@ -67,7 +68,7 @@ public:
 
     static bool read()
     {
-        return LL_GPIO_IsInputPinSet(gpio[port_id], 1U << pin_id);
+        return LL_GPIO_IsInputPinSet(GpioPort_regsLut[port_id], 1U << pin_id);
     }
 
     static bool isHigh()
@@ -77,7 +78,7 @@ public:
 
     static void setMode(uint32_t mode)
     {
-        GpioPin_setMode(gpio[port_id], pin_id, mode);
+        GpioPin_setMode(GpioPort_regsLut[port_id], pin_id, mode);
     }
 
     static void configOutput()
@@ -97,7 +98,7 @@ public:
 
     static void configPull(uint32_t pull_config)
     {
-        GpioPin_configPull(gpio[port_id], pin_id, pull_config);
+        GpioPin_configPull(GpioPort_regsLut[port_id], pin_id, pull_config);
     }
 
     static void enablePullUp()
@@ -160,34 +161,33 @@ public:
 //typedef GpioPin<GpioPinTemplate<GPIO_PORT_ID_A, PIN_ID>> GpioPinPortA
 
 template <size_t PIN_ID>
-using GpioPinPortA = GpioPin<GpioPinTemplate<GPIO_PORT_ID_A, PIN_ID>>;
+using GpioPinA = GpioPinTemplate<GPIO_PORT_ID_A, PIN_ID>;
 
 template <size_t PIN_ID>
-using GpioPinPortB = GpioPin<GpioPinTemplate<GPIO_PORT_ID_B, PIN_ID>>;
+using GpioPinB = GpioPinTemplate<GPIO_PORT_ID_B, PIN_ID>;
 
 template <size_t PIN_ID>
-using GpioPinPortC = GpioPin<GpioPinTemplate<GPIO_PORT_ID_C, PIN_ID>>;
+using GpioPinC = GpioPinTemplate<GPIO_PORT_ID_C, PIN_ID>;
 
 template <size_t PIN_ID>
-using GpioPinPortD = GpioPin<GpioPinTemplate<GPIO_PORT_ID_D, PIN_ID>>;
+using GpioPinD = GpioPinTemplate<GPIO_PORT_ID_D, PIN_ID>;
 
 template <size_t PIN_ID>
-using GpioPinPortE = GpioPin<GpioPinTemplate<GPIO_PORT_ID_E, PIN_ID>>;
+using GpioPinE = GpioPinTemplate<GPIO_PORT_ID_E, PIN_ID>;
 
 template <size_t PIN_ID>
-using GpioPinPortF = GpioPin<GpioPinTemplate<GPIO_PORT_ID_F, PIN_ID>>;
+using GpioPinF = GpioPinTemplate<GPIO_PORT_ID_F, PIN_ID>;
 
 template <size_t PIN_ID>
-using GpioPinPortG = GpioPin<GpioPinTemplate<GPIO_PORT_ID_G, PIN_ID>>;
+using GpioPinG = GpioPinTemplate<GPIO_PORT_ID_G, PIN_ID>;
 
 template<GpioPortId port_id, int byte_index>
 class GpioPort8BitTemplate
 {
-    constexpr static GPIO_TypeDef *const gpio[7] = { GPIOA, GPIOB, GPIOC, GPIOD, GPIOE, GPIOF, GPIOG };
 public:
     static void setMode(uint32_t mode)
     {
-        gpio[port_id]->MODER = (gpio[port_id]->MODER & ~(0xFFFFU << (byte_index * 16))) | (mode * 0x5555U << (byte_index * 16));
+        GpioPort_regsLut[port_id]->MODER = (GpioPort_regsLut[port_id]->MODER & ~(0xFFFFU << (byte_index * 16))) | (mode * 0x5555U << (byte_index * 16));
     }
 
     static void configOutput()
@@ -202,18 +202,17 @@ public:
 
     static void write(uint8_t data)
     {
-        *((uint8_t*)&gpio[port_id]->ODR + byte_index) = data;
+        *((uint8_t*)&GpioPort_regsLut[port_id]->ODR + byte_index) = data;
     }
 };
 
 template<GpioPortId port_id>
 class GpioPort16BitTemplate
 {
-    constexpr static GPIO_TypeDef *const gpio[7] = { GPIOA, GPIOB, GPIOC, GPIOD, GPIOE, GPIOF, GPIOG };
 public:
     static void setMode(uint32_t mode)
     {
-        gpio[port_id]->MODER = mode * 0x55555555U;
+        GpioPort_regsLut[port_id]->MODER = mode * 0x55555555U;
     }
 
     static void configOutput()
@@ -228,7 +227,7 @@ public:
 
     static void write(uint16_t data)
     {
-        *(uint16_t*)&gpio[port_id]->ODR = data;
+        *(uint16_t*)&GpioPort_regsLut[port_id]->ODR = data;
     }
 };
 
