@@ -19,7 +19,7 @@
 
 class Bus;
 
-template<int PREFETCH_SIZE>
+template<int PREFETCH_SIZE, typename TBUS>
 class Prefetcher
 {
     uint32_t base_address = 0;
@@ -39,7 +39,7 @@ public:
         printf("Prefetcher stats: hits=%lu, miss=%lu, hitrate=%lu%%" ENDL, hit, miss, (hit + miss) ? (100 * hit / (hit + miss)) : 0);
     }
 
-    void prefetch(Bus* bus, uint32_t addr)
+    void prefetch(TBUS* bus, uint32_t addr)
     {
         //if (addr >= base_address && addr < (base_address + PREFETCH_SIZE))
         //    return;
@@ -54,7 +54,7 @@ public:
         miss = 0;
     }
 
-    uint8_t read(Bus* bus, uint32_t addr)
+    uint8_t read(TBUS* bus, uint32_t addr)
     {
         #if 0
         return bus->cpuRead(addr);
@@ -83,7 +83,6 @@ public:
         return *(uint16_t*)&buffer[addr - base_address];
     }
 };
-
 
 class Cpu6502
 {
@@ -137,8 +136,8 @@ public:
     uint8_t opcode = 0x00;
     uint16_t cycles = 0;
     uint16_t temp = 0x0000;
-    uint32_t total_cycles __attribute__((used)) = 0;
-    uint32_t total_instructions __attribute__((used)) = 0;
+    uint32_t total_cycles = 0;
+    uint32_t total_instructions = 0;
 private: 
 	Bus* bus = nullptr;
     bool addrmode_implied = false;
@@ -187,7 +186,7 @@ private:
 
     uint16_t OAM_DMA_page = 0x00;
 public:
-    Prefetcher<32> cpu_prefetcher;
+    Prefetcher<32, Bus> cpu_prefetcher;
 };
 
 #endif

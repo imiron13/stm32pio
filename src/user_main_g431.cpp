@@ -350,7 +350,7 @@ bool shell_cmd_host_read(FILE *f, ShellCmd_t *cmd, const char *s)
     });
 
     if (success) {
-        printf("\r\nTransfer Successful (%u bytes)\r\n", size);
+        printf("\r\nTransfer Successful (%lu bytes)\r\n", size);
         loadedRomSize = size;
         return true;
     } else {
@@ -396,7 +396,6 @@ void apuInit()
 
 bool shell_cmd_play_nsf_chiptune(FILE *f, ShellCmd_t *cmd, const char *s)
 {
-    const uint32_t NSF_HEADER_SIZE = 0x80;
     fprintf(f, "Playing NSF chiptune..." ENDL);
     uint8_t *nsf_data = &romBuffer[0];
     size_t nsf_size = loadedRomSize;
@@ -518,9 +517,9 @@ extern "C" void task_nes_emu_main(void *argument)
     while (1)
     {
         //__disable_irq();
-        uint32_t time_start = DWT->CYCCNT;
-        uint32_t elapsed;
-        uint32_t frame __attribute__((used))= 0;
+        //uint32_t time_start = DWT->CYCCNT;
+        //uint32_t elapsed;
+        uint32_t frame = 0;
         for (frame = 0; frame < 100; frame++)
         {
             bus.clock();
@@ -556,7 +555,7 @@ extern "C" void task_nes_emu_main(void *argument)
             }
             shell.run();
         };
-#if 1
+#if 0
         //DWT_Stats::Print();
         elapsed = DWT->CYCCNT - time_start;
         //__enable_irq();

@@ -28,7 +28,7 @@ env.Append(ASFLAGS=[
     "-mlong-calls",
     "-fno-optimize-sibling-calls",
     #"-flto-partition=1to1",
-    #"-flto"
+    "-flto"
 ])
 
 env.Append(LINKFLAGS=[
@@ -39,7 +39,7 @@ env.Append(LINKFLAGS=[
     "-mlong-calls",
     "-fno-optimize-sibling-calls",
     #"-flto-partition=1to1",
-    #"-flto"
+    "-flto=4"
 ])
 env.Append(CCFLAGS=[
     "-mcpu=cortex-m4",
@@ -49,5 +49,5 @@ env.Append(CCFLAGS=[
     "-mlong-calls",
     "-fno-optimize-sibling-calls",
     #"-flto-partition=1to1",
-    #"-flto"
+    "-flto"
 ])

@@ -63,7 +63,7 @@ float AnalogStick::normalize(uint32_t rawValue) const {
     // Assuming 12-bit ADC (0 - 4095)
     // Center is approx 2048
     const float center = 2048.0f;
-    const float maxVal = 4095.0f;
+    //const float maxVal = 4095.0f;
     
     // Apply Deadzone
     if (std::abs((int)rawValue - (int)center) < (int)cfg.deadzone) {

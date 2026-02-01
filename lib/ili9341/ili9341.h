@@ -277,8 +277,8 @@ public:
 
     // Low-level commands
     static void setAddressWindow(uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1);
-    static void setXWindow(uint16_t x0, uint16_t x1);
-    static void setYWindow(uint16_t y0, uint16_t y1);
+    static void setXWindow(uint32_t x0, uint32_t x1);
+    static void setYWindow(uint32_t y0, uint32_t y1);
     static void memoryWrite();
     static void invertColors(bool invert);
 
@@ -522,21 +522,31 @@ void Ili9341_driver<LL_IF, COLOR_FILTER_BGR>::init(Orientation orientation, Colo
 }
 
 template<class LL_IF, bool COLOR_FILTER_BGR>
-void Ili9341_driver<LL_IF, COLOR_FILTER_BGR>::setXWindow(uint16_t x0, uint16_t x1)
+void Ili9341_driver<LL_IF, COLOR_FILTER_BGR>::setXWindow(uint32_t x0, uint32_t x1)
 {
     writeCommand(Command::COLUMN_ADDRESS_SET);
     {
-        uint8_t data[] = { (x0 >> 8) & 0xFF, x0 & 0xFF, (x1 >> 8) & 0xFF, x1 & 0xFF };
+        uint8_t data[] = { 
+            static_cast<uint8_t>((x0 >> 8u) & 0xFFu),
+            static_cast<uint8_t>(x0 & 0xFFu),
+            static_cast<uint8_t>((x1 >> 8u) & 0xFFu),
+            static_cast<uint8_t>(x1 & 0xFFu)
+        };
         LL_IF::writeData(data, sizeof(data));
     }
 }
 
 template<class LL_IF, bool COLOR_FILTER_BGR>
-void Ili9341_driver<LL_IF, COLOR_FILTER_BGR>::setYWindow(uint16_t y0, uint16_t y1)
+void Ili9341_driver<LL_IF, COLOR_FILTER_BGR>::setYWindow(uint32_t y0, uint32_t y1)
 {
     writeCommand(Command::ROW_ADDRESS_SET);
     {
-        uint8_t data[] = { (y0 >> 8) & 0xFF, y0 & 0xFF, (y1 >> 8) & 0xFF, y1 & 0xFF };
+        uint8_t data[] = { 
+            static_cast<uint8_t>((y0 >> 8u) & 0xFFu), 
+            static_cast<uint8_t>(y0 & 0xFFu),
+            static_cast<uint8_t>((y1 >> 8u) & 0xFFu),
+            static_cast<uint8_t>(y1 & 0xFFu)
+        };
         LL_IF::writeData(data, sizeof(data));
     }
 }

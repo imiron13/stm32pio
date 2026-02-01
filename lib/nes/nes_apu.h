@@ -48,7 +48,7 @@ public:
     uint8_t DMC_sample_byte = 0;
 	bool IRQ = false;
 	uint32_t buffer_index = 0;
-	uint32_t total_cycles __attribute__((used)) = 0;
+	uint32_t total_cycles = 0;
 	uint32_t apu_events = 0;
 private:
 	static const uint32_t NTSC_CPU_FREQ = 1789773;

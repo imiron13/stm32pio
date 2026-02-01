@@ -16,7 +16,17 @@
 			"usbd_cdc_if.h": "c",
 			"usbd_cdc.h": "c",
 			"usb_device.h": "c",
-			"hal_wrapper_stm32.h": "c"
+			"hal_wrapper_stm32.h": "c",
+			"flash_interface.h": "c",
+			"eeprom_emul_types.h": "c",
+			"stm32g4xx_hal.h": "c",
+			"usbd_core.h": "c",
+			"stm32g4xx_it.h": "c",
+			"main.h": "c",
+			"stm32g4xx_hal_conf.h": "c",
+			"stm32g4xx_hal_rtc.h": "c",
+			"cstdint": "cpp",
+			"fonts.h": "c"
 		}
 	}
 }

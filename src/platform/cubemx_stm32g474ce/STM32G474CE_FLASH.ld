@@ -16,11 +16,14 @@ MEMORY
   /* Flash: 512KB at 0x08000000 */
   FLASH (rx)      : ORIGIN = 0x08000000, LENGTH = 512K
   
-  /* SRAM1: 96KB (Main RAM for stack, heap, video) */
-  RAM   (xrw)     : ORIGIN = 0x20000000, LENGTH = 96K
+  /* SRAM1: 80KB (Main RAM for stack, heap, video) */
+  RAM   (xrw)     : ORIGIN = 0x20000000, LENGTH = 80K
   
-  /* SRAM2: 32KB (Dedicated for Audio DMA to avoid contention) */
-  RAM2  (xrw)     : ORIGIN = 0x20018000, LENGTH = 32K
+  /* SRAM2: 16KB (Dedicated for Audio DMA to avoid contention) */
+  RAM2  (xrw)     : ORIGIN = 0x20014000, LENGTH = 16K
+
+  /* CCRAM: 32KB (Dedicated for critical code) */
+  CCMRAM  (xrw)     : ORIGIN = 0x1000000, LENGTH = 32K
 }
 
 /* Define output sections */
@@ -111,6 +114,21 @@ SECTIONS
     _edata = .;        /* define a global symbol at data end */
   } >RAM AT> FLASH
 
+  /* Critical Code/Data in CCM RAM */
+  _siccmram = LOADADDR(.ccmram); /* Load address (in Flash) */
+  
+  .ccmram :
+  {
+    . = ALIGN(4);
+    _sccmram = .;       /* Start address (in CCMRAM) */
+    
+    *(.ccmram)
+    *(.ccmram*)
+    
+    . = ALIGN(4);
+    _eccmram = .;       /* End address (in CCMRAM) */
+  } >CCMRAM AT> FLASH
+
   /* Uninitialized data section */
   .bss :
   {
@@ -133,7 +151,7 @@ SECTIONS
     *(.sram2_data*)
     . = ALIGN(4);
   } >RAM2
-  
+
   /* User_heap_stack section, used to check that there is enough RAM left */
   ._user_heap_stack :
   {

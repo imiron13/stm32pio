@@ -192,7 +192,7 @@ IRAM_ATTR void Ppu2C02::renderScanline(uint16_t scanline)
 inline void Ppu2C02::transferScroll(uint16_t scanline)
 {
     if (!(mask.reg & (1 << 3) || mask.reg & (1 << 4))) return;
-    v.reg = (scanline == 0) ? t.reg : v.reg = (v.reg & ~0x041F) | (t.reg & 0x041F);
+    v.reg = (scanline == 0) ? t.reg : (v.reg & ~0x041F) | (t.reg & 0x041F);
 }
 
 /*inline*/ void Ppu2C02::incrementY()
@@ -279,10 +279,10 @@ void Ppu2C02::renderBackground()
     static constexpr DRAM_ATTR uint8_t pixel_shift[8] = { 14, 6, 12, 4, 10, 2, 8, 0 }; // Shifts to get the bits of a pixel
     static constexpr DRAM_ATTR uint8_t pixel_metadata[4] = { 0x80, 0x00, 0x00, 0x00 };
 
-    uint16_t tile_palette[4] = { bg_color };
+    /*uint16_t tile_palette[4] = { bg_color };
     tile_palette[1] = nes_palette[READ_PALETTE(attribute + 1)];
     tile_palette[2] = nes_palette[READ_PALETTE(attribute + 2)];
-    tile_palette[3] = nes_palette[READ_PALETTE(attribute + 3)];
+    tile_palette[3] = nes_palette[READ_PALETTE(attribute + 3)];*/
 
     const uint8_t* chr_mem = cart->ppuReadPtr(offset);
 
@@ -496,7 +496,7 @@ void Ppu2C02::fakeSpriteHit(uint16_t scanline)
     offset = (control.sprite_table_addr ? 0x1000 : 0);
     sprite_size = (control.sprite_size ? 16 : 8);
 
-    uint8_t sprite_x, sprite_y;
+    uint8_t sprite_y;
     sprite_y = sprite[0].y + 1;
     // Check if sprite is in scanline
     if ((sprite_y > scanline) || (sprite_y <= (scanline - sprite_size)) 
@@ -506,7 +506,6 @@ void Ppu2C02::fakeSpriteHit(uint16_t scanline)
     int16_t y_offset;
     uint16_t tile_addr;
 
-    sprite_x = sprite[0].x;
     tile_index = sprite[0].index;
     attribute_byte = sprite[0].attribute;
 
@@ -626,6 +625,9 @@ void Ppu2C02::setMirror(Cartridge::MIRROR mirror)
 
         case Cartridge::MIRROR::ONESCREEN_HIGH:
             ptr_nametable[0] = ptr_nametable[1] = ptr_nametable[2] = ptr_nametable[3] = &nametable[0x0400];
+            break;
+
+        default:
             break;
     }
 }
