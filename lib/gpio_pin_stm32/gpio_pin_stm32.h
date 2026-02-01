@@ -10,7 +10,6 @@
 #pragma once
 
 #include <stdint.h>
-#include <hal_wrapper_stm32.h>
 #include <ll_wrapper_stm32.h>
 #include <gpio_pin.h>
 
@@ -152,7 +151,19 @@ public:
 
     virtual void configInput(GpioPull_t pull=PULL_NONE)
     {
-        LL_GPIO_SetPinMode(m_gpioRegs, m_pinMask, LL_GPIO_MODE_INPUT);        
+        LL_GPIO_SetPinMode(m_gpioRegs, m_pinMask, LL_GPIO_MODE_INPUT);
+        if (pull == PULL_NONE)
+        {
+            LL_GPIO_SetPinPull(m_gpioRegs, m_pinMask, LL_GPIO_PULL_NO);
+        }
+        else if (pull == PULL_UP)
+        {
+            LL_GPIO_SetPinPull(m_gpioRegs, m_pinMask, LL_GPIO_PULL_UP);
+        }
+        else if (pull == PULL_DOWN)
+        {
+            LL_GPIO_SetPinPull(m_gpioRegs, m_pinMask, LL_GPIO_PULL_DOWN);
+        }
     }
 };
 

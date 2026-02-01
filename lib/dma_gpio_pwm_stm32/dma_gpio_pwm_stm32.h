@@ -15,7 +15,7 @@ class DmaGpioPwm_8bitParallelWithWriteStrobe
     static inline uint32_t s_buf_size = 0;
     static inline uint8_t* s_buf = nullptr;
     static void setupDataDmaCircularMode(uint8_t* buff, size_t buff_size);
-    static void setupWriteStrobePulsesPwm(uint8_t* buff, size_t buff_size);
+    static void setupWriteStrobePulsesPwm(size_t buff_size);
 
 public:
     static void init(uint32_t period = 16);
@@ -121,6 +121,21 @@ void DmaGpioPwm_8bitParallelWithWriteStrobe<TMR, GPIO, DMA>::init(uint32_t perio
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
     GPIO_InitStruct.Alternate = GPIO_AF6_TIM1;
     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+    
+    LL_TIM_SetOnePulseMode(TIM1, LL_TIM_ONEPULSEMODE_SINGLE);
+    
+    // CH1 - WR pulses generation
+    LL_TIM_CC_EnableChannel(TIM1, LL_TIM_CHANNEL_CH1);
+
+    // CH2 - DATA DMA trigger
+    // DMA is triggered on CH2 compare event: CNT==1
+    uint32_t data_dma_trigger_timing = 1;  // number of TIM1 cycles since overflow
+    LL_TIM_DisableDMAReq_UPDATE(TIM1);
+    LL_TIM_EnableDMAReq_CC2(TIM1);
+    LL_TIM_OC_SetCompareCH2(TIM1, data_dma_trigger_timing);
+
+    LL_TIM_EnableAllOutputs(TIM1);
 }
 
 template<class TMR, class GPIO, class DMA>
@@ -134,28 +149,12 @@ void DmaGpioPwm_8bitParallelWithWriteStrobe<TMR, GPIO, DMA>::setupDataDmaCircula
 }
 
 template<class TMR, class GPIO, class DMA>
-void DmaGpioPwm_8bitParallelWithWriteStrobe<TMR, GPIO, DMA>::setupWriteStrobePulsesPwm(uint8_t* buff, size_t buff_size)
+void DmaGpioPwm_8bitParallelWithWriteStrobe<TMR, GPIO, DMA>::setupWriteStrobePulsesPwm(size_t buff_size)
 {
-    TIM1->CR1 |= TIM_CR1_OPM; // ONE PULSE MODE
-    // CH1 - WR pulses generation
-    // CH2 - DATA DMA trigger
-    TIM1->RCR = buff_size - 1;
+    LL_TIM_SetRepetitionCounter(TIM1, buff_size - 1);
 
-    // ENABLE DMA REQUEST ON CC2
-    TIM1->DIER |= TIM_DIER_CC2DE;
-    TIM1->DIER &= ~TIM_DIER_UDE;
-
-    TIM1->CCR2 = 1;
-
-    // LOAD SHADOW REGISTERS
-    TIM1->EGR = TIM_EGR_UG;
-    __HAL_TIM_CLEAR_FLAG(&htim1, TIM_FLAG_UPDATE);
-
-    // THE FIX: ENABLE OUTPUTS MANUALLY
-    // 1. Enable Channel 1 (CC1E)
-    TIM1->CCER |= TIM_CCER_CC1E;
-    // 2. Enable Main Output (MOE) - Critical for TIM1/TIM8
-    TIM1->BDTR |= TIM_BDTR_MOE;
+    LL_TIM_GenerateEvent_UPDATE(TIM1);  // to update shadow registers?
+    //__HAL_TIM_CLEAR_FLAG(&htim1, TIM_FLAG_UPDATE);
 }
 
 template<class TMR, class GPIO, class DMA>
@@ -165,13 +164,13 @@ void DmaGpioPwm_8bitParallelWithWriteStrobe<TMR, GPIO, DMA>::setupCircularDouble
     s_buf_size = buff_size;
     s_buf = buff;
     setupDataDmaCircularMode(buff, buff_size);
-    setupWriteStrobePulsesPwm(buff, buff_size / 2);
+    setupWriteStrobePulsesPwm(buff_size / 2);
 }
 
 template<class TMR, class GPIO, class DMA>
 void DmaGpioPwm_8bitParallelWithWriteStrobe<TMR, GPIO, DMA>::startTransfer()
 {
-    TIM1->CR1 |= TIM_CR1_CEN;
+    LL_TIM_EnableCounter(TIM1);
 }
 
 template<class TMR, class GPIO, class DMA>
@@ -187,7 +186,7 @@ void DmaGpioPwm_8bitParallelWithWriteStrobe<TMR, GPIO, DMA>::doDoubleBufferTrans
         
     if (s_line % 2 == 0)
     {
-        setupCircularDoubleBufferMode(s_buf, s_buf_size);  // restart DMA to increase reliability (WR strobe corruption)
+        setupDataDmaCircularMode(s_buf, s_buf_size);  // restart DMA to increase reliability (WR strobe corruption)
     }
 
     s_line++;
