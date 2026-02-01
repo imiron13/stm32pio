@@ -7,6 +7,10 @@
 
 #pragma once
 
+#include <cstdint>
+
+using namespace std;
+
 enum GpioPull_t
 {
     PULL_NONE,
@@ -83,6 +87,73 @@ GpioPin<GPIO_PIN_TEMPLATE>::GpioPin()
     : GpioPinInterface()
 {
 }
+
+template<bool READ_VAL=false>
+class GpioPinTemplateDummy
+{
+public:
+    static void writeHigh()
+    {
+    }
+
+    static void writeLow()
+    {
+    }
+
+    static void write(bool is_high)
+    {
+        if (is_high)
+        {
+            writeHigh();
+        }
+        else
+        {
+            writeLow();
+        }
+    }
+
+    static bool read()
+    {
+        return READ_VAL;
+    }
+
+    static bool isHigh()
+    {
+        return read();
+    }
+
+    static void setMode(uint32_t mode)
+    {
+    }
+
+    static void configOutput()
+    {
+    }
+
+    static void configInput()
+    {
+    }
+
+    static void configAlternateFunction()
+    {
+    }
+
+    static void configPull(uint32_t pull_config)
+    {
+    }
+
+    static void enablePullUp()
+    {
+    }
+
+    static void enablePullDown()
+    {
+    }
+
+    static void disablePullUpPullDown()
+    {
+    }
+};
 
 class DummyGpioPinAlwaysLow : public GpioPinInterface
 {

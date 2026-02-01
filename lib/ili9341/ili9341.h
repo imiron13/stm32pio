@@ -1,6 +1,7 @@
 #pragma once
 
 #include "fonts.h"
+#include <intrinsics.h>
 #include <stdbool.h>
 #include <gpio_pin_stm32.h>
 
@@ -262,7 +263,7 @@ public:
         LANDSCAPE_FLIPPED
     };
 
-    static void init(Orientation orientation = Orientation::PORTRAIT, ColorFormat color_format=ColorFormat::RGB565);
+    static no_inline void init(Orientation orientation = Orientation::PORTRAIT, ColorFormat color_format=ColorFormat::RGB565);
     static uint32_t getWidth() { return s_width; }
     static uint32_t getHeight() { return s_height; }
 

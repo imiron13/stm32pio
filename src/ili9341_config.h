@@ -7,7 +7,7 @@ using Ili9341_bus = GpioPortA0_8Bit;
 using Ili9341_dcPin = GpioPinTemplate<GPIO_PORT_ID_A, 15>;
 using Ili9341_wrPin = GpioPinTemplate<GPIO_PORT_ID_A, 8>;
 using Ili9341_resetPin = GpioPinTemplate<GPIO_PORT_ID_C, 11>;
-using Ili9341_csPin = GpioPinTemplate<GPIO_PORT_ID_B, 2>;
+using Ili9341_csPin = GpioPinTemplateDummy<>;
 using Ili9341_dma = DmaGpioPwm_8bitParallelWithWriteStrobe<Ili9341_bus,Ili9341_bus,Ili9341_bus>;
 const uint32_t Ili9341_wstrb_delay_clk = 4;
 
