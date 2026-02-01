@@ -34,6 +34,9 @@
 #elif L4
 #include "stm32l4xx_hal.h"
 #define STM32_FAMILY_NAME_STR       "L4"
+#elif G0
+#include "stm32g0xx_hal.h"
+#define STM32_FAMILY_NAME_STR       "G0"
 #elif G4
 #include "stm32g4xx_hal.h"
 #define STM32_FAMILY_NAME_STR       "G4"

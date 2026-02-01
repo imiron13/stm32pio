@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <hal_wrapper_stm32.h>
+#include <ll_wrapper_stm32.h>
 
 using namespace std;
 
@@ -176,19 +177,17 @@ void DmaGpioPwm_8bitParallelWithWriteStrobe<TMR, GPIO, DMA>::startTransfer()
 template<class TMR, class GPIO, class DMA>
 void DmaGpioPwm_8bitParallelWithWriteStrobe<TMR, GPIO, DMA>::waitTransferComplete()
 {
-    while (TIM1->CR1 & TIM_CR1_CEN);
+    while (LL_TIM_IsEnabledCounter(TIM1));
 }
 
 template<class TMR, class GPIO, class DMA>
 void DmaGpioPwm_8bitParallelWithWriteStrobe<TMR, GPIO, DMA>::doDoubleBufferTransfer()
 {
-    // called when N-th line is prepared by FW
     waitTransferComplete();
-    //setx(32, 32 + 255);
         
     if (s_line % 2 == 0)
     {
-        setupCircularDoubleBufferMode(s_buf, s_buf_size);
+        setupCircularDoubleBufferMode(s_buf, s_buf_size);  // restart DMA to increase reliability (WR strobe corruption)
     }
 
     s_line++;

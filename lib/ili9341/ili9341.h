@@ -309,6 +309,7 @@ void Ili9341_driver<LL_IF, COLOR_FILTER_BGR>::controlMode()
 template<class LL_IF, bool COLOR_FILTER_BGR>
 void Ili9341_driver<LL_IF, COLOR_FILTER_BGR>::setupCircularDoubleBufferMode(uint8_t* buff, size_t buff_size)
 {
+    dmaMode();
     LL_IF::setupCircularDoubleBufferMode(buff, buff_size);
 }
 
@@ -325,10 +326,14 @@ void Ili9341_driver<LL_IF, COLOR_FILTER_BGR>::waitTransferComplete() {
 template<class LL_IF, bool COLOR_FILTER_BGR>
 void Ili9341_driver<LL_IF, COLOR_FILTER_BGR>::doDoubleBufferTransfer() {
     LL_IF::doDoubleBufferTransfer();
-    restartCs(10);
-    controlMode();
-    //setAddressWindow(32, scanline, 32 + 255, 239);
-    dmaMode();
+    bool resetAddressWindow = true;
+    if (resetAddressWindow)
+    {
+        restartCs(10);
+        controlMode();
+        //setAddressWindow(32, scanline, 32 + 255, 239);
+        dmaMode();
+    }
     startTransfer();
 }
 
@@ -602,4 +607,3 @@ void Ili9341_driver<LL_IF, COLOR_FILTER_BGR>::writeString(uint16_t x, uint16_t y
 }
 
 #include "ili9341_config.h"
-

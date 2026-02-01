@@ -118,7 +118,7 @@ IRAM_ATTR void Bus::clock()
     else num_skipped_frames++;
 
     ppu.write_buf_idx = 0;
-    ppu.ptr_display = ppu.display_buffer[1];
+    ppu.ptr_display = ppu.display_buffer[0];
     if (!frame_skip) {
         Ili9341::setAddressWindow(32, 0, 32 + 255, 239);
         Ili9341::setupCircularDoubleBufferMode((uint8_t*)&ppu.display_buffer[0], SCANLINE_SIZE * SCANLINES_PER_BUFFER * 2 * sizeof(uint16_t));
@@ -135,7 +135,8 @@ IRAM_ATTR void Bus::clock()
     {
         if (frame_skip == 0) { 
             ppu.renderScanline(ppu_scanline); 
-            Ili9341::doDoubleBufferTransfer();
+
+            //Ili9341::doDoubleBufferTransfer();
         }
         else { ppu.fakeSpriteHit(ppu_scanline); }
 
@@ -144,7 +145,7 @@ IRAM_ATTR void Bus::clock()
 
         if (frame_skip == 0) { 
             ppu.renderScanline(ppu_scanline + 1); 
-            Ili9341::doDoubleBufferTransfer();
+            //Ili9341::doDoubleBufferTransfer();
         }
         else { ppu.fakeSpriteHit(ppu_scanline + 1); }
 
@@ -153,13 +154,14 @@ IRAM_ATTR void Bus::clock()
 
         if (frame_skip == 0) { 
             ppu.renderScanline(ppu_scanline + 2); 
-            Ili9341::doDoubleBufferTransfer();
+            //Ili9341::doDoubleBufferTransfer();
         }
         else { ppu.fakeSpriteHit(ppu_scanline + 2);  }
 
         cpu.clock(114);
         cpu.apu.clock((113+114+114) / 2);
     }
+    
     Ili9341::waitTransferComplete();
     //cpu.apu.clock(80/2);
     // Setup for the next frame
@@ -218,10 +220,10 @@ IRAM_ATTR void Bus::renderImage(uint16_t scanline)
         st = HAL_SPI_Transmit_DMA(&hspi1, reinterpret_cast<uint8_t*>(ppu.display_buffer[ppu.write_buf_idx] /*ppu.ptr_buffer*/), 128 /*256*/ * SCANLINES_PER_BUFFER * 2);
     } while (st != HAL_OK);
 #endif
-    ppu.ptr_display = ppu.display_buffer[ppu.write_buf_idx];
-    ppu.write_buf_idx ^= 1;
+    Ili9341::doDoubleBufferTransfer();
     ppu.ptr_buffer = ppu.display_buffer[ppu.write_buf_idx];
-
+    ppu.write_buf_idx ^= 1;
+    ppu.ptr_display = ppu.display_buffer[ppu.write_buf_idx];
 } 
 
 
