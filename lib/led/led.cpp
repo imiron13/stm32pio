@@ -1,7 +1,7 @@
 #include <led.h>
 #include <gpio_pin.h>
 
-Led_t::Led_t(GpioPinInterface_t *gpio, bool is_active_low)
+Led_t::Led_t(GpioPinInterface *gpio, bool is_active_low)
     : m_gpio(gpio)
     , m_is_active_low(is_active_low)
 {
@@ -9,7 +9,7 @@ Led_t::Led_t(GpioPinInterface_t *gpio, bool is_active_low)
 
 void Led_t::init()
 {
-    m_gpio->config_output();
+    m_gpio->configOutput();
 }
 
 void Led_t::on()

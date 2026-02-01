@@ -56,39 +56,39 @@ public:
     static void init() {
         DMA::init();
 
-        GPIO_CS::write_high();
-        GPIO_WR::write_high();
-        GPIO_RESET::write_high();
-        GPIO_DC::write_low();
+        GPIO_CS::writeHigh();
+        GPIO_WR::writeHigh();
+        GPIO_RESET::writeHigh();
+        GPIO_DC::writeLow();
         BUS::write(0x00);
 
-        GPIO_CS::config_output();
-        GPIO_DC::config_output();
-        GPIO_WR::config_output();
-        GPIO_RESET::config_output();
-        BUS::config_output();
+        GPIO_CS::configOutput();
+        GPIO_DC::configOutput();
+        GPIO_WR::configOutput();
+        GPIO_RESET::configOutput();
+        BUS::configOutput();
     }
 
     static void select() {
-        GPIO_CS::write_low();
+        GPIO_CS::writeLow();
     }
 
     static void unselect() {
-        GPIO_CS::write_high();
+        GPIO_CS::writeHigh();
     }
 
     static void dataMode() {
-        GPIO_DC::write_high();
+        GPIO_DC::writeHigh();
     }
 
     static void commandMode() {
-        GPIO_DC::write_low();
+        GPIO_DC::writeLow();
     }
 
     static void writeStobe() {
-        GPIO_WR::write_low();
+        GPIO_WR::writeLow();
         for (uint32_t i = 0; i < WSTRB_DELAY; i++) __NOP();
-        GPIO_WR::write_high();
+        GPIO_WR::writeHigh();
     }
 
     static void setDataBus(uint8_t data) {
@@ -115,18 +115,18 @@ public:
     }
 
     static void reset(uint32_t delay_ms) {
-        GPIO_RESET::write_low();
+        GPIO_RESET::writeLow();
         HAL_Delay(delay_ms);
-        GPIO_RESET::write_high();
+        GPIO_RESET::writeHigh();
     }
 
     static void dmaMode() {
-        GPIO_WR::config_alternate_function();
+        GPIO_WR::configAlternateFunction();
     }
 
     static void controlMode() {
-        GPIO_WR::write_high();
-        GPIO_WR::config_output();
+        GPIO_WR::writeHigh();
+        GPIO_WR::configOutput();
     }
 
     static void setupCircularDoubleBufferMode(uint8_t* buff, size_t buff_size) {

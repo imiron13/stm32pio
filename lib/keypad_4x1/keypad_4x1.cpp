@@ -2,8 +2,8 @@
 #include <gpio_pin.h>
 
 Keypad_4x1::Keypad_4x1(
-    GpioPinInterface_t *key1, GpioPinInterface_t *key2, GpioPinInterface_t *key3, 
-    GpioPinInterface_t *key4, GpioPinInterface_t *common
+    GpioPinInterface *key1, GpioPinInterface *key2, GpioPinInterface *key3, 
+    GpioPinInterface *key4, GpioPinInterface *common
 )
     : m_gpio_button1(key1)
     , m_gpio_button2(key2)
@@ -21,8 +21,8 @@ void Keypad_4x1::init()
 {
     if (m_gpio_common)
     {
-        m_gpio_common->config_output();
-        m_gpio_common->write_low();
+        m_gpio_common->configOutput();
+        m_gpio_common->writeLow();
     }
 
     m_button1.init(true);

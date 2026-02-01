@@ -1,6 +1,6 @@
 #include <button.h>
 
-Button_t::Button_t(GpioPinInterface_t *gpio_pin, bool is_active_low)
+Button_t::Button_t(GpioPinInterface *gpio_pin, bool is_active_low)
     : m_gpio_pin(gpio_pin)
     , m_is_active_low(is_active_low)
     , is_pressed_prev(false)
@@ -16,14 +16,14 @@ void Button_t::init(bool need_pull)
     {
         pull = (m_is_active_low ? PULL_UP : PULL_DOWN);
     }
-    m_gpio_pin->config_input(pull);
+    m_gpio_pin->configInput(pull);
     is_pressed_prev = _is_pressed_raw();
     is_pressed_cur = is_pressed_prev;
 }
 
 bool Button_t::_is_pressed_raw()
 {
-    return m_gpio_pin->is_high() ^ m_is_active_low;
+    return m_gpio_pin->isHigh() ^ m_is_active_low;
 }
 
 bool Button_t::is_pressed()

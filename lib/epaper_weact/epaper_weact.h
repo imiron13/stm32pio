@@ -62,12 +62,12 @@ class EpaperWeAct_Driver_t : public BinaryScreenBuffer_t
         DEEP_SLEEP_MODE1 = 0x01,
         DEEP_SLEEP_MODE2 = 0x03,
     };
-    GpioPinInterface_t *m_scl;
-    GpioPinInterface_t *m_sda;
-    GpioPinInterface_t *m_dc;
-    GpioPinInterface_t *m_cs;
-    GpioPinInterface_t *m_busy;
-    GpioPinInterface_t *m_rst;
+    GpioPinInterface *m_scl;
+    GpioPinInterface *m_sda;
+    GpioPinInterface *m_dc;
+    GpioPinInterface *m_cs;
+    GpioPinInterface *m_busy;
+    GpioPinInterface *m_rst;
 
 
     void select_cs();
@@ -115,9 +115,9 @@ public:
 
     EpaperWeAct_Driver_t(int width, int height);
 
-    void config_pins(GpioPinInterface_t *scl, GpioPinInterface_t *sda,
-                     GpioPinInterface_t *dc, GpioPinInterface_t *cs, 
-                     GpioPinInterface_t *busy, GpioPinInterface_t *rst);
+    void config_pins(GpioPinInterface *scl, GpioPinInterface *sda,
+                     GpioPinInterface *dc, GpioPinInterface *cs, 
+                     GpioPinInterface *busy, GpioPinInterface *rst);
     void config_resolution(int width, int height);
 
     void init();

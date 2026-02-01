@@ -13,7 +13,7 @@
 class Button_t
 {
 public:
-    Button_t(GpioPinInterface_t *gpio_pin, bool is_active_low=false);
+    Button_t(GpioPinInterface *gpio_pin, bool is_active_low=false);
 
     void init(bool need_pull=false);
     bool is_pressed();
@@ -22,7 +22,7 @@ public:
     bool is_released_event();
 
 private:
-    GpioPinInterface_t *m_gpio_pin;
+    GpioPinInterface *m_gpio_pin;
     bool m_is_active_low;
     bool is_pressed_prev;
     bool is_pressed_cur;

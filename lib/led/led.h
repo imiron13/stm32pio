@@ -12,10 +12,10 @@
 
 class Led_t
 {
-    GpioPinInterface_t *m_gpio;
+    GpioPinInterface *m_gpio;
     bool m_is_active_low;
 public:
-    Led_t(GpioPinInterface_t *gpio, bool is_active_low=false);
+    Led_t(GpioPinInterface *gpio, bool is_active_low=false);
 
     void init();
     void on();

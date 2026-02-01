@@ -6,11 +6,11 @@
 // Pinout left to right: ground, key2, key1, key4, key3
 class Keypad_4x1 
 {
-    GpioPinInterface_t *m_gpio_button1;
-    GpioPinInterface_t *m_gpio_button2;
-    GpioPinInterface_t *m_gpio_button3;
-    GpioPinInterface_t *m_gpio_button4;
-    GpioPinInterface_t *m_gpio_common;
+    GpioPinInterface *m_gpio_button1;
+    GpioPinInterface *m_gpio_button2;
+    GpioPinInterface *m_gpio_button3;
+    GpioPinInterface *m_gpio_button4;
+    GpioPinInterface *m_gpio_common;
     
     Button_t m_button1;
     Button_t m_button2;
@@ -19,8 +19,8 @@ class Keypad_4x1
 
 public:
     Keypad_4x1(
-        GpioPinInterface_t *key1, GpioPinInterface_t *key2, GpioPinInterface_t *key3, 
-        GpioPinInterface_t *key4, GpioPinInterface_t *common=nullptr
+        GpioPinInterface *key1, GpioPinInterface *key2, GpioPinInterface *key3, 
+        GpioPinInterface *key4, GpioPinInterface *common=nullptr
     );
 
     void init();

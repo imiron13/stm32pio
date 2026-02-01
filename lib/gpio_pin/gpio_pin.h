@@ -14,36 +14,36 @@ enum GpioPull_t
     PULL_DOWN
 };
 
-class GpioPinInterface_t
+class GpioPinInterface
 {
 public:
-    void write_high()
+    void writeHigh()
     {
         write(true);
     }
 
-    void write_low()
+    void writeLow()
     {
         write(false);
     }
 
-    bool is_high()
+    bool isHigh()
     {
         return read();
     }
 
-    virtual void config_output() = 0;
-    virtual void config_input(GpioPull_t pull=PULL_NONE) = 0;
+    virtual void configOutput() = 0;
+    virtual void configInput(GpioPull_t pull=PULL_NONE) = 0;
 
     virtual void write(bool is_high) = 0;
     virtual bool read() = 0;
 };
 
 template<typename GPIO_PIN_TEMPLATE>
-class GpioPin_t : public GpioPinInterface_t
+class GpioPin : public GpioPinInterface
 {
 public:
-    GpioPin_t();
+    GpioPin();
 
     virtual void write(bool is_high)
     {
@@ -55,36 +55,36 @@ public:
         return GPIO_PIN_TEMPLATE::read();
     }
 
-    virtual void config_output()
+    virtual void configOutput()
     {
-        GPIO_PIN_TEMPLATE::config_output();
+        GPIO_PIN_TEMPLATE::configOutput();
     }
 
-    virtual void config_input(GpioPull_t pull=PULL_NONE)
+    virtual void configInput(GpioPull_t pull=PULL_NONE)
     {
         if (pull == PULL_NONE)
         {
-            GPIO_PIN_TEMPLATE::disable_pullup_pulldown();
+            GPIO_PIN_TEMPLATE::disablePullUpPullDown();
         }
         else if (pull == PULL_UP)
         {
-            GPIO_PIN_TEMPLATE::enable_pullup();
+            GPIO_PIN_TEMPLATE::enablePullUp();
         }
         else // pull == PULL_DOWN
         {
-            GPIO_PIN_TEMPLATE::enable_pulldown();
+            GPIO_PIN_TEMPLATE::enablePullDown();
         }
-        GPIO_PIN_TEMPLATE::config_input();        
+        GPIO_PIN_TEMPLATE::configInput();        
     }
 };
 
 template<typename GPIO_PIN_TEMPLATE>
-GpioPin_t<GPIO_PIN_TEMPLATE>::GpioPin_t()
-    : GpioPinInterface_t()
+GpioPin<GPIO_PIN_TEMPLATE>::GpioPin()
+    : GpioPinInterface()
 {
 }
 
-class DummyGpioPinAlwaysLow : public GpioPinInterface_t
+class DummyGpioPinAlwaysLow : public GpioPinInterface
 {
 public:
     DummyGpioPinAlwaysLow() {}
@@ -98,16 +98,16 @@ public:
         return false;
     }
 
-    virtual void config_output()
+    virtual void configOutput()
     {
     }
 
-    virtual void config_input(GpioPull_t pull=PULL_NONE)
+    virtual void configInput(GpioPull_t pull=PULL_NONE)
     {
     }
 };
 
-class DummyGpioPinAlwaysHigh_t : public GpioPinInterface_t
+class DummyGpioPinAlwaysHigh_t : public GpioPinInterface
 {
 public:
     DummyGpioPinAlwaysHigh_t() {}
@@ -121,11 +121,11 @@ public:
         return true;
     }
 
-    virtual void config_output()
+    virtual void configOutput()
     {
     }
 
-    virtual void config_input(GpioPull_t pull=PULL_NONE)
+    virtual void configInput(GpioPull_t pull=PULL_NONE)
     {
     }
 };

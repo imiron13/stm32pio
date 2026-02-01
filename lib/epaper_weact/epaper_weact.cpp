@@ -29,9 +29,9 @@ EpaperWeAct_Driver_t::EpaperWeAct_Driver_t(int width, int height)
 {
 }
 
-void EpaperWeAct_Driver_t::config_pins(GpioPinInterface_t *scl, GpioPinInterface_t *sda,
-             GpioPinInterface_t *dc, GpioPinInterface_t *cs, 
-             GpioPinInterface_t *busy, GpioPinInterface_t *rst)
+void EpaperWeAct_Driver_t::config_pins(GpioPinInterface *scl, GpioPinInterface *sda,
+             GpioPinInterface *dc, GpioPinInterface *cs, 
+             GpioPinInterface *busy, GpioPinInterface *rst)
 {
     m_scl = scl;
     m_sda = sda;
@@ -49,51 +49,51 @@ void EpaperWeAct_Driver_t::config_resolution(int width, int height)
 
 void EpaperWeAct_Driver_t::select_cs()
 {
-    m_cs->write_low();
+    m_cs->writeLow();
 }
 
 void EpaperWeAct_Driver_t::deselect_cs()
 {
-    m_cs->write_high();
+    m_cs->writeHigh();
 }
 
 void EpaperWeAct_Driver_t::reset_activate()
 {
-    m_rst->write_low();
+    m_rst->writeLow();
 }
 
 void EpaperWeAct_Driver_t::reset_deactivate()
 {
-    m_rst->write_high();
+    m_rst->writeHigh();
 }
 
 void EpaperWeAct_Driver_t::select_command()
 {
-    m_dc->write_low();
+    m_dc->writeLow();
 }
 
 void EpaperWeAct_Driver_t::select_data()
 {
-    m_dc->write_high();
+    m_dc->writeHigh();
 }
 
 void EpaperWeAct_Driver_t::sda_input()
 {
-    m_sda->config_input();
+    m_sda->configInput();
 }
 
 void EpaperWeAct_Driver_t::sda_output()
 {
-    m_sda->config_output();
+    m_sda->configOutput();
 }
 
 void EpaperWeAct_Driver_t::send_byte(uint8_t byte)
 {
     for (int i = BITS_PER_BYTE - 1; i >= 0; i--)
     {
-        m_scl->write_low();
+        m_scl->writeLow();
         m_sda->write((byte & (1U << i)) != 0);
-        m_scl->write_high();
+        m_scl->writeHigh();
     }
 }
 
@@ -103,10 +103,10 @@ uint8_t EpaperWeAct_Driver_t::read_byte()
 
     for (int i = BITS_PER_BYTE - 1; i >= 0; i--)
     {
-        m_scl->write_low();
+        m_scl->writeLow();
         //HAL_Delay(1);
         data |= static_cast<uint8_t>(m_sda->read()) << i;
-        m_scl->write_high();
+        m_scl->writeHigh();
     }
 
     return data;    
@@ -261,18 +261,18 @@ void EpaperWeAct_Driver_t::set_xy(int x, int y)
 void EpaperWeAct_Driver_t::init()
 {
     // Configure pins
-    m_busy->config_input();
-    m_rst->config_output();
-    m_dc->config_output();
-    m_cs->config_output();
-    m_scl->config_output();
-    m_sda->config_output();
+    m_busy->configInput();
+    m_rst->configOutput();
+    m_dc->configOutput();
+    m_cs->configOutput();
+    m_scl->configOutput();
+    m_sda->configOutput();
 
-    m_cs->write_high();
-    m_scl->write_high();
-    m_sda->write_high();
-    m_rst->write_high();
-    m_dc->write_high();
+    m_cs->writeHigh();
+    m_scl->writeHigh();
+    m_sda->writeHigh();
+    m_rst->writeHigh();
+    m_dc->writeHigh();
 
     // 1. Power On
     HAL_Delay(POWER_ON_DELAY_MS);
